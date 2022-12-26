@@ -1,5 +1,3 @@
-ccflags-y=-I$(PWD)/../include
-
 ifneq ($(KERNELRELEASE),)
 	obj-m += winterfs.o
 	winterfs-y := super.o dir.o file.o
