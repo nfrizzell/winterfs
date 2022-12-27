@@ -1,4 +1,6 @@
+#include <byteswap.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,6 +16,36 @@
 #define WINTERFS_INODE_SIZE             128
 #define WINTERFS_INODE_FILE             0
 #define WINTERFS_INODE_DIR              1
+
+bool host_is_le()
+{
+	int x = 1;
+	return *(char *)&x == 1;
+}
+
+uint16_t le16(uint16_t val)
+{
+	if (!host_is_le()) {
+		return bswap_16(val);
+	}
+	return val;
+}
+
+uint32_t le32(uint32_t val)
+{
+	if (!host_is_le()) {
+		return bswap_32(val);
+	}
+	return val;
+}
+
+uint64_t le64(uint32_t val)
+{
+	if (!host_is_le()) {
+		return bswap_64(val);
+	}
+	return val;
+}
 
 struct winterfs_inode {
         uint64_t size;
