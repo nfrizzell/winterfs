@@ -7,9 +7,9 @@
 
 #define WINTERFS_MAGIC		0x574e4653
 
-#define WINTERFS_SUPERBLOCK_LBA		1
-#define WINTERFS_INODE_LIST_HEAD_LBA	2
-#define WINTERFS_FREE_LIST_HEAD_LBA	3
+#define WINTERFS_SUPERBLOCK_LBA		0
+#define WINTERFS_INODE_LIST_HEAD_LBA	1
+#define WINTERFS_FREE_LIST_HEAD_LBA	2
 
 // on-disk structures
 struct winterfs_indirect_block_list {
