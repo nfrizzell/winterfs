@@ -45,5 +45,7 @@ struct winterfs_inode_info {
 };
 
 struct inode *winterfs_iget (struct super_block *sb, u64 ino);
+struct winterfs_inode *winterfs_get_inode(struct super_block *sb, 
+	ino_t ino, struct buffer_head **p);
 
 #endif // WINTERFS_INO

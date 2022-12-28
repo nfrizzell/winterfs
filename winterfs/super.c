@@ -16,21 +16,16 @@ static struct dentry *winterfs_mount(struct file_system_type *fs_type,
 	return mount_bdev(fs_type, flags, dev_name, data, winterfs_fill_super);
 }
 
-static int winterfs_statfs(struct dentry *dent, struct kstatfs *stat)
-{
-	return 0;
-}
-
 const static struct super_operations winterfs_super_operations = {
-	.statfs = winterfs_statfs
+	.statfs = simple_statfs
 };
 
 static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	int ret;
+	struct buffer_head *sb_buf;
 	struct winterfs_superblock *ws;
 	struct winterfs_sb_info *sbi;
-	struct buffer_head *sb_buf;
 
 	sbi = kzalloc(sizeof(struct winterfs_sb_info), GFP_KERNEL);
 	if (!sbi) {
