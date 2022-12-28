@@ -1,19 +1,24 @@
 #include <byteswap.h>
 #include <errno.h>
+#include <linux/fs.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 
 #define WINTERFS_BLOCK_SIZE     4096
 
 #define WINTERFS_SUPERBLOCK_LBA         0
+#define WINTERFS_INODES_LBA         	1
 
 #define WINTERFS_INODE_PRIMARY_BLOCKS   8
 #define WINTERFS_INODE_SIZE             128
 #define WINTERFS_INODE_FILE             0
 #define WINTERFS_INODE_DIR              1
+
+#define WINTERFS_INODE_RATIO		(1 << 15)
 
 bool host_is_le()
 {
@@ -62,23 +67,33 @@ struct winterfs_inode {
 
 struct winterfs_superblock {
 	uint8_t magic[4];
-	uint64_t num_inodes;
-	uint64_t num_blocks;
-	uint32_t inodes_idx;
-        uint32_t free_block_bitset_idx;
+	uint32_t num_inodes;
+	uint32_t num_blocks;
         uint32_t free_inode_bitset_idx;
+        uint32_t free_block_bitset_idx;
         uint32_t bad_block_bitset_idx;
         uint32_t data_blocks_idx;
-
-	uint8_t block_size; // actual size = 2^block_size
 } __attribute__((packed));
 
-int write_superblock(FILE *dev, struct stat *s)
+int write_superblock(FILE *dev, uint32_t num_blocks, uint32_t num_inodes)
 {
+	uint32_t num_inode_blocks = ((num_inodes * WINTERFS_INODE_SIZE) / WINTERFS_BLOCK_SIZE) + (((num_inodes * WINTERFS_INODE_SIZE) % WINTERFS_BLOCK_SIZE) != 0);
+	uint32_t num_inode_bitset_blocks = (num_inode_blocks / (8 * WINTERFS_BLOCK_SIZE)) + (num_inode_blocks % (8 * WINTERFS_BLOCK_SIZE) != 0);
+	uint32_t inode_bitset_idx = num_inode_blocks;
+
+	uint32_t num_block_bitset_blocks = (num_blocks / (8 * WINTERFS_BLOCK_SIZE)) + (num_blocks % (8 * WINTERFS_BLOCK_SIZE) != 0);
+	uint32_t free_block_bitset_idx = inode_bitset_idx + num_inode_bitset_blocks;
+	uint32_t bad_block_bitset_idx = free_block_bitset_idx + num_block_bitset_blocks;
+	uint32_t data_block_idx = bad_block_bitset_idx + num_block_bitset_blocks;
+
 	struct winterfs_superblock sb = {
 		.magic = {0x57, 0x4e, 0x46, 0x53},
-		.num_blocks = s->st_size / WINTERFS_BLOCK_SIZE + (s->st_size % WINTERFS_BLOCK_SIZE != 0),
-		.num_inodes = 31
+		.num_blocks = le32(num_blocks), 
+		.num_inodes = le32(num_inodes),
+		.free_inode_bitset_idx = le32(num_inode_blocks),
+		.free_block_bitset_idx = le32(free_block_bitset_idx),
+		.bad_block_bitset_idx = le32(bad_block_bitset_idx),
+		.data_blocks_idx = le32(data_block_idx),
 	};
 
 	fseek(dev, 0, SEEK_SET);
@@ -90,17 +105,10 @@ int write_superblock(FILE *dev, struct stat *s)
 	return 0;	
 }
 
-int write_free_block_stack(FILE *dev)
-{
-	return 0;
-}
-
 int format_device(char *device_path)
 {
 	struct stat s;
-	int err;
-
-	err = stat(device_path, &s);
+	int err = stat(device_path, &s);
 	if (err) {
 		printf("Error opening file: os error %d\n", errno);
 		goto err;
@@ -117,12 +125,11 @@ int format_device(char *device_path)
 		goto err;
 	}
 
-	err = write_superblock(dev, &s);
-	if (err) {
-		goto err_file;
-	}
-
-	err = write_free_block_stack(dev);
+	uint32_t block_dev_size_bytes;
+	ioctl(fileno(dev), BLKGETSIZE64, &block_dev_size_bytes);
+	uint32_t num_blocks = block_dev_size_bytes / WINTERFS_BLOCK_SIZE;
+	uint32_t num_inodes = block_dev_size_bytes / WINTERFS_INODE_RATIO;
+	err = write_superblock(dev, num_blocks, num_inodes);
 	if (err) {
 		goto err_file;
 	}
