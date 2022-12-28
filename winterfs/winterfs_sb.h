@@ -6,8 +6,7 @@
 #include "winterfs.h"
 
 #define WINTERFS_SUPERBLOCK_LBA		0
-#define WINTERFS_INODE_LIST_HEAD_LBA	1
-#define WINTERFS_FREE_LIST_HEAD_LBA	2
+#define WINTERFS_INODES_LBA             1
 
 // on-disk structure
 struct winterfs_indirect_block_list {
@@ -18,21 +17,20 @@ struct winterfs_superblock {
 	__le32 magic;
         __le32 num_inodes;
         __le32 num_blocks;
-	__le32 inodes_idx;
-	__le32 free_block_bitset_idx;
 	__le32 free_inode_bitset_idx;
+	__le32 free_block_bitset_idx;
 	__le32 bad_block_bitset_idx;
 	__le32 data_blocks_idx;
-
-        u8 block_size; // actual size = 2^block_size
 } __attribute__((packed));
 
 // in-memory structure
 struct winterfs_sb_info {
 	u32 num_inodes;
 	u32 num_blocks;
-	u32 first_inode_idx;
-	u32 first_data_idx;
+	u32 free_inode_bitset_idx;
+	u32 free_block_bitset_idx;
+	u32 bad_block_bitset_idx;
+	u32 data_blocks_idx;
 
 	struct super_block *vfs_sb;
 	spinlock_t s_lock;

@@ -6,7 +6,6 @@
 
 struct inode *winterfs_iget (struct super_block *sb, u64 ino)
 {
-	
 	return NULL;
 }
 
@@ -22,7 +21,7 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb,
 
 	sbi = (struct winterfs_sb_info *) sb->s_fs_info;
 	inode_block = (ino * WINTERFS_INODE_SIZE) / WINTERFS_BLOCK_SIZE;
-	inode_block_lba = inode_block + sbi->first_inode_idx;
+	inode_block_lba = inode_block + WINTERFS_INODES_LBA;
 	offset = (ino * WINTERFS_INODE_SIZE) % WINTERFS_BLOCK_SIZE;
 
 	bh = sb_bread(sb, inode_block_lba);

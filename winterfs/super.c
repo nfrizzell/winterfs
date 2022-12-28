@@ -7,7 +7,6 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
-
 static int winterfs_fill_super(struct super_block *sb, void *data, int silent);
 
 static struct dentry *winterfs_mount(struct file_system_type *fs_type,
@@ -43,11 +42,17 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	ws = (struct winterfs_superblock *)sb_buf->b_data;
+	sbi->num_inodes = le32_to_cpu(ws->num_inodes);
+	sbi->num_blocks = le32_to_cpu(ws->num_blocks);
+	sbi->free_inode_bitset_idx = le32_to_cpu(ws->free_inode_bitset_idx);
+	sbi->free_block_bitset_idx = le32_to_cpu(ws->free_block_bitset_idx);
+	sbi->bad_block_bitset_idx = le32_to_cpu(ws->bad_block_bitset_idx);
+	sbi->data_blocks_idx = le32_to_cpu(ws->data_blocks_idx);
 
 	sb->s_magic 		= ws->magic;
 	sb->s_maxbytes 		= WINTERFS_MAX_FILE_SIZE;
-	sb->s_blocksize 	= (1 << ws->block_size);
-	sb->s_blocksize_bits 	= ws->block_size;
+	sb->s_blocksize 	= WINTERFS_BLOCK_SIZE;
+	sb->s_blocksize_bits 	= 12;
 	sb->s_op		= &winterfs_super_operations;
 	sb->s_time_gran		= WINTERFS_TIME_RES; // 1 sec
 	strcpy(sb->s_id, "winterfs");
