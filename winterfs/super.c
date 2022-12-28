@@ -7,6 +7,24 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
+
+static int winterfs_fill_super(struct super_block *sb, void *data, int silent);
+
+static struct dentry *winterfs_mount(struct file_system_type *fs_type,
+        int flags, const char *dev_name, void *data)
+{
+	return mount_bdev(fs_type, flags, dev_name, data, winterfs_fill_super);
+}
+
+static int winterfs_statfs(struct dentry *dent, struct kstatfs *stat)
+{
+	return 0;
+}
+
+const static struct super_operations winterfs_super_operations = {
+	.statfs = winterfs_statfs
+};
+
 static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	int ret;
@@ -30,8 +48,14 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	ws = (struct winterfs_superblock *)sb_buf->b_data;
-	sb->s_magic = le32_to_cpu(ws->magic);
-	sb->s_blocksize = (1 << ws->block_size);
+
+	sb->s_magic 		= ws->magic;
+	sb->s_maxbytes 		= WINTERFS_MAX_FILE_SIZE;
+	sb->s_blocksize 	= (1 << ws->block_size);
+	sb->s_blocksize_bits 	= ws->block_size;
+	sb->s_op		= &winterfs_super_operations;
+	sb->s_time_gran		= WINTERFS_TIME_RES; // 1 sec
+	strcpy(sb->s_id, "winterfs");
 
 	return 0;
 err:
@@ -39,16 +63,6 @@ err:
 	kfree(sbi);
 	return ret;	
 }
-
-static struct dentry *winterfs_mount(struct file_system_type *fs_type,
-        int flags, const char *dev_name, void *data)
-{
-	return mount_bdev(fs_type, flags, dev_name, data, winterfs_fill_super);
-}
-
-const struct super_operations winterfs_super_operations = {
-
-};
 
 static struct file_system_type winterfs_fs_type = {
 	.owner			= THIS_MODULE,
@@ -62,12 +76,8 @@ static int __init init_winterfs_fs(void)
 {
 	int err;
 
-	BUILD_BUG_ON(sizeof(struct winterfs_free_list_node) != WINTERFS_BLOCK_SIZE);
-	BUILD_BUG_ON(sizeof(struct winterfs_inode_list_node) != WINTERFS_BLOCK_SIZE);
 	BUILD_BUG_ON(sizeof(struct winterfs_superblock) > WINTERFS_BLOCK_SIZE);
-
 	BUILD_BUG_ON(sizeof(struct winterfs_inode) != WINTERFS_INODE_SIZE);
-	BUILD_BUG_ON(sizeof(struct winterfs_indirect_block_list) != WINTERFS_BLOCK_SIZE);
 
 	err = register_filesystem(&winterfs_fs_type);
 	return err;

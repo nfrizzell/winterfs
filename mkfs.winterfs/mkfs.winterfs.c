@@ -8,7 +8,7 @@
 
 #define WINTERFS_BLOCK_SIZE     4096
 
-#define WINTERFS_SUPERBLOCK_LBA         1
+#define WINTERFS_SUPERBLOCK_LBA         0
 
 #define WINTERFS_INODE_PRIMARY_BLOCKS   8
 #define WINTERFS_INODE_SIZE             128
@@ -47,38 +47,28 @@ uint64_t le64(uint32_t val)
 
 struct winterfs_inode {
 	uint64_t size;
+	uint64_t create_time;
+	uint64_t modify_time;
+	uint64_t access_time;
 	uint8_t type;
-	uint8_t pad[39]; // reserved for metadata
-	uint64_t primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
-	uint64_t secondary_blocks;
-	uint64_t tertiary_blocks;
-} __attribute__((packed));
+	uint8_t pad[51]; // reserved for metadata
+			 
+	uint32_t primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
+	uint32_t secondary_blocks;
+	uint32_t tertiary_blocks;
+	uint32_t quaternary_blocks;
 
-struct winterfs_block_list {
-	uint64_t size; // number of items in the list
-	uint64_t num_nodes; // number of blocks the list occupies
-	uint64_t list_head; // block index of the first node
-	uint64_t list_tail; // block index of the last node
-} __attribute__((packed));
-
-struct winterfs_free_list_node {
-	uint64_t list[(WINTERFS_BLOCK_SIZE / sizeof(uint64_t)) - 1];
-	uint64_t next;
-} __attribute__((packed));
-
-struct winterfs_inode_list_node {
-	struct winterfs_inode list[(WINTERFS_BLOCK_SIZE / WINTERFS_INODE_SIZE) - 1];
-	uint8_t pad[WINTERFS_INODE_SIZE - sizeof(uint64_t)];
-	uint64_t next;
 } __attribute__((packed));
 
 struct winterfs_superblock {
 	uint8_t magic[4];
 	uint64_t num_inodes;
 	uint64_t num_blocks;
-
-	struct winterfs_block_list free_block_list;
-	struct winterfs_block_list inode_list;
+	uint32_t inodes_idx;
+        uint32_t free_block_bitset_idx;
+        uint32_t free_inode_bitset_idx;
+        uint32_t bad_block_bitset_idx;
+        uint32_t data_blocks_idx;
 
 	uint8_t block_size; // actual size = 2^block_size
 } __attribute__((packed));
@@ -99,7 +89,6 @@ int write_superblock(FILE *dev, struct stat *s)
 
 	return 0;	
 }
-
 
 int write_free_block_stack(FILE *dev)
 {
