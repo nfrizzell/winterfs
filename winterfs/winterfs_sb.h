@@ -8,6 +8,8 @@
 #define WINTERFS_SUPERBLOCK_LBA		0
 #define WINTERFS_INODES_LBA             1
 
+#define WINTERFS_ROOT_INODE		1
+
 // on-disk structure
 struct winterfs_indirect_block_list {
 	__le32 blocks[WINTERFS_BLOCK_SIZE / sizeof(__le32)];

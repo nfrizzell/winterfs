@@ -25,6 +25,7 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 	struct buffer_head *sb_buf;
 	struct winterfs_superblock *ws;
 	struct winterfs_sb_info *sbi;
+	struct inode *root;
 
 	sbi = kzalloc(sizeof(struct winterfs_sb_info), GFP_KERNEL);
 	if (!sbi) {
@@ -56,6 +57,19 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_op		= &winterfs_super_operations;
 	sb->s_time_gran		= WINTERFS_TIME_RES; // 1 sec
 	strcpy(sb->s_id, "winterfs");
+
+	root = winterfs_iget(sb, WINTERFS_ROOT_INODE);
+        if (IS_ERR(root)) {
+                ret = PTR_ERR(root);
+                goto err;
+        }
+
+	sb->s_root = d_make_root(root);
+        if (!sb->s_root) {
+                printk(KERN_ERR "Get root inode failed");
+                ret = -ENOMEM;
+                goto err;
+        }
 
 	return 0;
 err:

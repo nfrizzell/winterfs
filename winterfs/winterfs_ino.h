@@ -44,6 +44,12 @@ struct winterfs_inode_info {
 	u32 quaternary_blocks;
 };
 
+extern const struct file_operations winterfs_file_operations;
+extern const struct file_operations winterfs_dir_operations;
+
+extern const struct inode_operations winterfs_file_inode_operations;
+extern const struct inode_operations winterfs_dir_inode_operations;
+
 struct inode *winterfs_iget (struct super_block *sb, u64 ino);
 struct winterfs_inode *winterfs_get_inode(struct super_block *sb, 
 	ino_t ino, struct buffer_head **p);
