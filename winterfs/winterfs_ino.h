@@ -32,11 +32,6 @@ struct winterfs_inode {
 
 // in-memory structure
 struct winterfs_inode_info {
-	u64 size;
-	u64 create_time;
-	u64 modify_time;
-	u64 access_time;
-
         u8 type;
 	u32 primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
         u32 secondary_blocks;
@@ -51,7 +46,6 @@ extern const struct inode_operations winterfs_file_inode_operations;
 extern const struct inode_operations winterfs_dir_inode_operations;
 
 struct inode *winterfs_iget (struct super_block *sb, u64 ino);
-struct winterfs_inode *winterfs_get_inode(struct super_block *sb, 
-	ino_t ino, struct buffer_head **p);
+struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino);
 
 #endif // WINTERFS_INO

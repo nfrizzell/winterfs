@@ -7,13 +7,6 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
-static int winterfs_fill_super(struct super_block *sb, void *data, int silent);
-
-static struct dentry *winterfs_mount(struct file_system_type *fs_type,
-        int flags, const char *dev_name, void *data)
-{
-	return mount_bdev(fs_type, flags, dev_name, data, winterfs_fill_super);
-}
 
 const static struct super_operations winterfs_super_operations = {
 	.statfs = simple_statfs
@@ -64,6 +57,8 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
                 goto err;
         }
 
+	inode_init_owner(&init_user_ns, root, NULL, S_IFDIR | 0755);
+
 	sb->s_root = d_make_root(root);
         if (!sb->s_root) {
                 printk(KERN_ERR "Get root inode failed");
@@ -76,6 +71,12 @@ err:
 	sb->s_fs_info = NULL;
 	kfree(sbi);
 	return ret;	
+}
+
+static struct dentry *winterfs_mount(struct file_system_type *fs_type,
+        int flags, const char *dev_name, void *data)
+{
+	return mount_bdev(fs_type, flags, dev_name, data, winterfs_fill_super);
 }
 
 static struct file_system_type winterfs_fs_type = {

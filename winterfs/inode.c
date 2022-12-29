@@ -6,10 +6,10 @@
 
 struct inode *winterfs_iget (struct super_block *sb, u64 ino)
 {
+	struct inode *err;
 	struct winterfs_inode *wfs_inode;
 	struct winterfs_inode_info *wfs_info;
 	struct inode *inode;
-	struct buffer_head *bh;
 
 	inode = iget_locked(sb, ino);
 	if (!inode) {
@@ -19,13 +19,20 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
                 return inode;
 	}
 
-	wfs_info = (struct winterfs_inode_info *)inode->i_private;
-
-	wfs_inode = winterfs_get_inode(sb, ino, &bh);
+	wfs_inode = winterfs_get_inode(sb, ino);
 	if (IS_ERR(wfs_inode)) {
-		brelse(bh);
-		return ERR_PTR(PTR_ERR(wfs_inode));
+		err = ERR_PTR(PTR_ERR(wfs_inode));
+		goto cleanup;
 	}
+	wfs_info = kzalloc(sizeof(struct winterfs_inode_info), GFP_KERNEL);
+	inode->i_private = wfs_info;
+
+	inode->i_size = le64_to_cpu(wfs_inode->size);
+	inode->i_mode = (wfs_inode->type == WINTERFS_INODE_DIR) ? S_IFDIR : S_IFREG;
+	inode->i_atime.tv_sec = le64_to_cpu(wfs_inode->access_time);
+	inode->i_mtime.tv_sec = le64_to_cpu(wfs_inode->modify_time);
+	inode->i_ctime.tv_sec = le64_to_cpu(wfs_inode->create_time);
+
 	if (S_ISREG(inode->i_mode)) {
                 inode->i_op = &winterfs_file_inode_operations;
                 inode->i_fop = &winterfs_file_operations;
@@ -34,13 +41,18 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
                 inode->i_fop = &simple_dir_operations;
 	}
 
-	brelse(bh);
+	printk(KERN_ERR "Inode info: %llu %d %llu %llu %llu\n", inode->i_size, inode->i_mode, inode->i_atime.tv_sec, inode->i_mtime.tv_sec, inode->i_ctime.tv_sec);
+
+	unlock_new_inode(inode);
 
 	return inode;
+
+cleanup:
+	iget_failed(inode);
+	return err;
 }
 
-struct winterfs_inode *winterfs_get_inode(struct super_block *sb, 
-	ino_t ino, struct buffer_head **bh_out)
+struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino)
 {
 	struct buffer_head *bh;
 	struct winterfs_inode *wf_inode;
@@ -48,12 +60,12 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb,
 	u32 inode_block_lba;
 	u16 offset; 
 
-	inode_block = (ino * WINTERFS_INODE_SIZE) / WINTERFS_BLOCK_SIZE;
+	inode_block = ((ino-1) * WINTERFS_INODE_SIZE) / WINTERFS_BLOCK_SIZE;
 	inode_block_lba = inode_block + WINTERFS_INODES_LBA;
-	offset = (ino-1 * WINTERFS_INODE_SIZE) % WINTERFS_BLOCK_SIZE;
+	offset = ((ino-1) * WINTERFS_INODE_SIZE) % WINTERFS_BLOCK_SIZE;
+	printk(KERN_ERR "inode_block: %d inode_block_lba: %d offset: %d", inode_block, inode_block_lba, offset);
 
 	bh = sb_bread(sb, inode_block_lba);
-	*bh_out = bh;
 	if (!bh) {
 		printk(KERN_ERR "Error reading block %u\n", inode_block_lba);
 		return ERR_PTR(-EIO);
@@ -64,7 +76,8 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	memcpy(bh->b_data + offset, wf_inode, sizeof(struct winterfs_inode));
+	memcpy(wf_inode, bh->b_data + offset, sizeof(struct winterfs_inode));
+	brelse(bh);
 
 	return wf_inode;
 }
