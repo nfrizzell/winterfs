@@ -1,3 +1,4 @@
+pwd
 make
 sudo make install
 sudo umount ~/wmnt || true
