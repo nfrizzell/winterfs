@@ -20,9 +20,10 @@ struct winterfs_inode {
 	__le64 create_time;
 	__le64 modify_time;
 	__le64 access_time;
+	__le32 parent_ino;
+	u8 name_len; // names are placed at the beginning of the first data block
         u8 type;
-	u8 pad[51]; // reserved for metadata
-
+	u8 pad[46]; // reserved for metadata
 	__le32 primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
         __le32 secondary_blocks;
 	__le32 tertiary_blocks;

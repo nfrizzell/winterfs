@@ -7,8 +7,17 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
+static void winterfs_put_super(struct super_block *sb)
+{
+	winterfs_sb_info *sbi;
+
+	sbi = sb->s_fs_info;
+	brelse(sbi->sb_buf);
+	kfree(sbi);
+}
 
 const static struct super_operations winterfs_super_operations = {
+	.put_super = winterfs_put_super,
 	.statfs = simple_statfs
 };
 
@@ -35,6 +44,7 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 		goto err;
 	}
 
+	sbi->sb_buf = sb_buf;
 	ws = (struct winterfs_superblock *)sb_buf->b_data;
 	sbi->num_inodes = le32_to_cpu(ws->num_inodes);
 	sbi->num_blocks = le32_to_cpu(ws->num_blocks);
@@ -43,13 +53,18 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->bad_block_bitset_idx = le32_to_cpu(ws->bad_block_bitset_idx);
 	sbi->data_blocks_idx = le32_to_cpu(ws->data_blocks_idx);
 
-	sb->s_magic 		= ws->magic;
+	sb->s_magic 		= be32_to_cpu(ws->magic);
 	sb->s_maxbytes 		= WINTERFS_MAX_FILE_SIZE;
 	sb->s_blocksize 	= WINTERFS_BLOCK_SIZE;
 	sb->s_blocksize_bits 	= 12;
 	sb->s_op		= &winterfs_super_operations;
 	sb->s_time_gran		= WINTERFS_TIME_RES; // 1 sec
 	strcpy(sb->s_id, "winterfs");
+
+	if (sb->s_magic != WINTERFS_MAGIC) {
+		ret = -EINVAL;
+                goto err;
+	}
 
 	root = winterfs_iget(sb, WINTERFS_ROOT_INODE);
         if (IS_ERR(root)) {

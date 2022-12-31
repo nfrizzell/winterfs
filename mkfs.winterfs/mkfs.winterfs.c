@@ -57,14 +57,14 @@ struct winterfs_inode {
 	uint64_t create_time;
 	uint64_t modify_time;
 	uint64_t access_time;
+        uint32_t parent_ino;
+        uint8_t name_len; // names are placed at the beginning of the first data block
 	uint8_t type;
-	uint8_t pad[51]; // reserved for metadata
-			 
+	uint8_t pad[46]; // reserved for metadata
 	uint32_t primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
 	uint32_t secondary_blocks;
 	uint32_t tertiary_blocks;
 	uint32_t quaternary_blocks;
-
 } __attribute__((packed));
 
 struct winterfs_superblock {

@@ -39,6 +39,9 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
 	} else if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = &simple_dir_inode_operations;
                 inode->i_fop = &simple_dir_operations;
+	} else {
+		err = ERR_PTR(-EIO);
+		goto cleanup;
 	}
 
 	printk(KERN_ERR "Inode info: %llu %d %llu %llu %llu\n", inode->i_size, inode->i_mode, inode->i_atime.tv_sec, inode->i_mtime.tv_sec, inode->i_ctime.tv_sec);
@@ -48,6 +51,7 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
 	return inode;
 
 cleanup:
+	make_bad_inode(inode);
 	iget_failed(inode);
 	return err;
 }

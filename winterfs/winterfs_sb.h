@@ -35,6 +35,7 @@ struct winterfs_sb_info {
 	u32 data_blocks_idx;
 
 	struct super_block *vfs_sb;
+	buffer_head *sb_buf;
 	spinlock_t s_lock;
 };
 
