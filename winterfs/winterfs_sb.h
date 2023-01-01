@@ -1,6 +1,7 @@
 #ifndef WINTERFS_SB
 #define WINTERFS_SB
 
+#include <linux/buffer_head.h>
 #include <linux/types.h>
 #include <linux/fs.h>
 #include "winterfs.h"
@@ -35,7 +36,7 @@ struct winterfs_sb_info {
 	u32 data_blocks_idx;
 
 	struct super_block *vfs_sb;
-	buffer_head *sb_buf;
+	struct buffer_head *sb_buf;
 	spinlock_t s_lock;
 };
 

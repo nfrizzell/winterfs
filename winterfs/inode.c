@@ -4,6 +4,47 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
+struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
+	const struct qstr *qstr)
+{
+	struct super_block *sb;
+	struct winterfs_sb_info *sbi;
+	struct buffer_head *bbh;
+	u32 free_inode;
+	u32 bidx;
+	u32 num_bitset_blocks;
+
+	sb = inode->i_sb;
+	sbi = sb->s_fs_info;
+	bidx = sbi->free_inode_bitset_idx;
+	num_bitset_blocks = (sbi->num_inodes / (WINTERFS_BLOCK_SIZE * 8)) + ((sbi->num_inodes % (BLOCK_SIZE * 8)) != 0);
+
+	for (int i = 0; i < num_bitset_blocks; i++) {
+		int num_bits;
+		int zero_bit;
+
+		u32 lba = bidx + i;
+		bbh = sb_bread(sb, lba);
+		if (!bbh) {
+			return ERR_PTR(-EIO);
+		}
+		num_bits = 8 * WINTERFS_BLOCK_SIZE;
+		zero_bit = find_first_zero_bit_le(bbh->b_data, num_bits);
+		if (zero_bit != num_bits) {
+			bbh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
+			mark_buffer_dirty(bbh);
+			free_inode = (i * 8 * WINTERFS_BLOCK_SIZE) + zero_bit;
+			brelse(bbh);
+			break;
+		}
+		brelse(bbh);
+	}
+	if (!free_inode) {
+		return ERR_PTR(-ENOMEM);
+	}
+	return inode;
+}
+
 struct inode *winterfs_iget (struct super_block *sb, u64 ino)
 {
 	struct inode *err;
@@ -85,11 +126,3 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino)
 
 	return wf_inode;
 }
-
-const struct inode_operations winterfs_file_inode_operations = {
-
-};
-
-const struct inode_operations winterfs_dir_inode_operations = {
-
-};

@@ -9,7 +9,7 @@
 
 static void winterfs_put_super(struct super_block *sb)
 {
-	winterfs_sb_info *sbi;
+	struct winterfs_sb_info *sbi;
 
 	sbi = sb->s_fs_info;
 	brelse(sbi->sb_buf);
@@ -17,7 +17,7 @@ static void winterfs_put_super(struct super_block *sb)
 }
 
 const static struct super_operations winterfs_super_operations = {
-	.put_super = winterfs_put_super,
+	//.put_super = winterfs_put_super,
 	.statfs = simple_statfs
 };
 
@@ -110,6 +110,7 @@ static int __init init_winterfs_fs(void)
 	BUILD_BUG_ON(sizeof(struct winterfs_inode) != WINTERFS_INODE_SIZE);
 
 	err = register_filesystem(&winterfs_fs_type);
+
 	return err;
 }
 
