@@ -17,7 +17,7 @@ static void winterfs_put_super(struct super_block *sb)
 }
 
 const static struct super_operations winterfs_super_operations = {
-	//.put_super = winterfs_put_super,
+	.put_super = winterfs_put_super,
 	.statfs = simple_statfs
 };
 
@@ -76,7 +76,7 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	sb->s_root = d_make_root(root);
         if (!sb->s_root) {
-                printk(KERN_ERR "Get root inode failed");
+                printk(KERN_ERR "Get root inode failed\n");
                 ret = -ENOMEM;
                 goto err;
         }

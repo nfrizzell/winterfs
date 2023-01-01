@@ -22,8 +22,9 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 	for (int i = 0; i < num_bitset_blocks; i++) {
 		int num_bits;
 		int zero_bit;
+		u32 lba;
 
-		u32 lba = bidx + i;
+		lba = bidx + i;
 		bbh = sb_bread(sb, lba);
 		if (!bbh) {
 			return ERR_PTR(-EIO);
