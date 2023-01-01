@@ -1,6 +1,8 @@
 #include <linux/buffer_head.h>
 #include <linux/fs.h>
 #include "winterfs.h"
+#include "winterfs_dir.h"
+#include "winterfs_file.h"
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
@@ -22,10 +24,10 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 	for (int i = 0; i < num_bitset_blocks; i++) {
 		int num_bits;
 		int zero_bit;
-		u32 lba;
+		u32 idx;
 
-		lba = bidx + i;
-		bbh = sb_bread(sb, lba);
+		idx = bidx + i;
+		bbh = sb_bread(sb, idx);
 		if (!bbh) {
 			return ERR_PTR(-EIO);
 		}
@@ -86,8 +88,6 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
 		goto cleanup;
 	}
 
-	printk(KERN_ERR "Inode info: %llu %d %llu %llu %llu\n", inode->i_size, inode->i_mode, inode->i_atime.tv_sec, inode->i_mtime.tv_sec, inode->i_ctime.tv_sec);
-
 	unlock_new_inode(inode);
 
 	return inode;
@@ -103,17 +103,16 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino)
 	struct buffer_head *bh;
 	struct winterfs_inode *wf_inode;
 	u32 inode_block; 	
-	u32 inode_block_lba;
+	u32 inode_block_idx;
 	u16 offset; 
 
 	inode_block = ((ino-1) * WINTERFS_INODE_SIZE) / WINTERFS_BLOCK_SIZE;
-	inode_block_lba = inode_block + WINTERFS_INODES_LBA;
+	inode_block_idx = inode_block + WINTERFS_INODES_BLOCK_IDX;
 	offset = ((ino-1) * WINTERFS_INODE_SIZE) % WINTERFS_BLOCK_SIZE;
-	printk(KERN_ERR "inode_block: %d inode_block_lba: %d offset: %d", inode_block, inode_block_lba, offset);
 
-	bh = sb_bread(sb, inode_block_lba);
+	bh = sb_bread(sb, inode_block_idx);
 	if (!bh) {
-		printk(KERN_ERR "Error reading block %u\n", inode_block_lba);
+		printk(KERN_ERR "Error reading block %u\n", inode_block_idx);
 		return ERR_PTR(-EIO);
 	}
 

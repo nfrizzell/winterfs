@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#define WINTERFS_BLOCK_SIZE     4096
+#define WINTERFS_BLOCK_SIZE     	4096
 
 #define WINTERFS_SUPERBLOCK_LBA         0
 #define WINTERFS_INODES_LBA         	1
@@ -58,7 +58,7 @@ struct winterfs_inode {
 	uint64_t modify_time;
 	uint64_t access_time;
         uint32_t parent_ino;
-        uint8_t name_len; // names are placed at the beginning of the first data block
+        uint8_t filename_len; // names are placed at the beginning of the first data block
 	uint8_t type;
 	uint8_t pad[46]; // reserved for metadata
 	uint32_t primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
@@ -77,12 +77,12 @@ struct winterfs_superblock {
         uint32_t data_blocks_idx;
 } __attribute__((packed));
 
-struct free_blocks {
+struct winterfs_free_blocks {
 	uint32_t size;
 	uint8_t * bitset;
 } __attribute__((packed));
 
-int get_next_free_block(struct free_blocks *fb)
+int get_next_free_block(struct winterfs_free_blocks *fb)
 {
 	for (size_t i = 0; i < fb->size; i++) {
 		if (fb->bitset[i] != 0xFF) {
@@ -130,7 +130,7 @@ int write_superblock(FILE *dev, uint32_t num_blocks, uint32_t num_inodes)
 	return 0;	
 }
 
-int write_root_dir_inode(FILE *dev, struct free_blocks *fb)
+int write_root_dir_inode(FILE *dev, struct winterfs_free_blocks *fb)
 {
 	struct winterfs_inode root = {
 		.size = WINTERFS_BLOCK_SIZE,
@@ -150,7 +150,7 @@ int write_root_dir_inode(FILE *dev, struct free_blocks *fb)
 	return 0;
 }
 
-int write_free_block_bitset(FILE *dev, struct free_blocks *fb)
+int write_free_block_bitset(FILE *dev, struct winterfs_free_blocks *fb)
 {
 
 	return 0;
@@ -181,7 +181,7 @@ int format_device(char *device_path)
 	uint32_t num_blocks = block_dev_size_bytes / WINTERFS_BLOCK_SIZE;
 	uint32_t num_inodes = block_dev_size_bytes / WINTERFS_INODE_RATIO;
 
-	struct free_blocks fb = {
+	struct winterfs_free_blocks fb = {
 		.size = num_blocks,
 		.bitset = calloc((num_blocks / 8) + (num_blocks % 8 != 0), 1)
 	};

@@ -15,13 +15,15 @@
 	(WINTERFS_BLOCK_SIZE * WINTERFS_BLOCK_SIZE / 16) + \
 	(WINTERFS_BLOCK_SIZE / 256 * WINTERFS_BLOCK_SIZE * WINTERFS_BLOCK_SIZE)
 
+#define WINTERFS_TIME_RES 		1000000 // 1 second
+
 struct winterfs_inode {
 	__le64 size; // in bytes
 	__le64 create_time;
 	__le64 modify_time;
 	__le64 access_time;
 	__le32 parent_ino;
-	u8 name_len; // names are placed at the beginning of the first data block
+	u8 filename_len; // filenames are placed in their own block
         u8 type;
 	u8 pad[46]; // reserved for metadata
 	__le32 primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
@@ -41,10 +43,7 @@ struct winterfs_inode_info {
 };
 
 extern const struct inode_operations winterfs_file_inode_operations;
-extern const struct file_operations winterfs_file_operations;
-
 extern const struct inode_operations winterfs_dir_inode_operations;
-extern const struct file_operations winterfs_dir_operations;
 
 struct inode *winterfs_new_inode(struct inode *dir, umode_t mode,
 	const struct qstr *qstr);

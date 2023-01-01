@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include "winterfs.h"
+#include "winterfs_dir.h"
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
@@ -38,7 +39,7 @@ static int winterfs_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->vfs_sb = sb;
 	sb->s_fs_info = sbi;
 
-	sb_buf = sb_bread(sb, WINTERFS_SUPERBLOCK_LBA);
+	sb_buf = sb_bread(sb, WINTERFS_SUPERBLOCK_BLOCK_IDX);
 	if (!sb_buf) {
 		printk(KERN_ERR "Error reading superblock from disk");
 		goto err;
@@ -108,6 +109,7 @@ static int __init init_winterfs_fs(void)
 
 	BUILD_BUG_ON(sizeof(struct winterfs_superblock) > WINTERFS_BLOCK_SIZE);
 	BUILD_BUG_ON(sizeof(struct winterfs_inode) != WINTERFS_INODE_SIZE);
+	BUILD_BUG_ON(sizeof(struct winterfs_dir_block) != WINTERFS_BLOCK_SIZE);
 
 	err = register_filesystem(&winterfs_fs_type);
 

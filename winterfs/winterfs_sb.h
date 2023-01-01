@@ -6,8 +6,10 @@
 #include <linux/fs.h>
 #include "winterfs.h"
 
-#define WINTERFS_SUPERBLOCK_LBA		0
-#define WINTERFS_INODES_LBA             1
+#define WINTERFS_MAGIC	 	0x574e4653
+
+#define WINTERFS_SUPERBLOCK_BLOCK_IDX	0
+#define WINTERFS_INODES_BLOCK_IDX	1
 
 #define WINTERFS_ROOT_INODE		1
 
