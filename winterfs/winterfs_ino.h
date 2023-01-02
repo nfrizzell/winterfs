@@ -47,7 +47,7 @@ extern const struct inode_operations winterfs_dir_inode_operations;
 
 struct inode *winterfs_new_inode(struct inode *dir, umode_t mode,
 	const struct qstr *qstr);
-struct inode *winterfs_iget (struct super_block *sb, u64 ino);
-struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino);
+struct inode *winterfs_iget (struct super_block *sb, u32 ino);
+struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, struct buffer_head **bh_out);
 
 #endif // WINTERFS_INO

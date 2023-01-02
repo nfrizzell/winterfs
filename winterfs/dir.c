@@ -5,6 +5,33 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
+static struct winterfs_dir_block_info *winterfs_dir_load_block(struct super_block *sb, u32 dir_block_idx)
+{
+	struct buffer_head *bh;
+	struct winterfs_dir_block_info *wdbi;
+	int err;
+
+	wdbi = kzalloc(sizeof(struct winterfs_dir_block_info), GFP_KERNEL);
+	if (!wdbi) {
+		return ERR_PTR(-ENOMEM);
+	}
+
+	bh = sb_bread(sb, dir_block_idx);
+	if (!bh) {
+		printk(KERN_ERR "Error reading block %u\n", dir_block_idx);
+		err = -EIO;
+		goto cleanup;
+	}
+
+	wdbi->bh = bh;
+	wdbi->db = (struct winterfs_dir_block *)bh->b_data;
+
+	return wdbi;
+cleanup:
+	kfree(wdbi);
+	return ERR_PTR(err);
+}
+
 static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry, 
 	unsigned int flags)
 {

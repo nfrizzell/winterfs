@@ -48,12 +48,13 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 	return inode;
 }
 
-struct inode *winterfs_iget (struct super_block *sb, u64 ino)
+struct inode *winterfs_iget (struct super_block *sb, u32 ino)
 {
-	struct inode *err;
+	struct inode *inode;
 	struct winterfs_inode *wfs_inode;
 	struct winterfs_inode_info *wfs_info;
-	struct inode *inode;
+	struct buffer_head *bh = NULL;
+	int err = 0;
 
 	inode = iget_locked(sb, ino);
 	if (!inode) {
@@ -63,9 +64,10 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
                 return inode;
 	}
 
-	wfs_inode = winterfs_get_inode(sb, ino);
+	wfs_inode = winterfs_get_inode(sb, ino, &bh);
+	brelse(bh);
 	if (IS_ERR(wfs_inode)) {
-		err = ERR_PTR(PTR_ERR(wfs_inode));
+		err = PTR_ERR(wfs_inode);
 		goto cleanup;
 	}
 	wfs_info = kzalloc(sizeof(struct winterfs_inode_info), GFP_KERNEL);
@@ -84,7 +86,7 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
                 inode->i_op = &simple_dir_inode_operations;
                 inode->i_fop = &simple_dir_operations;
 	} else {
-		err = ERR_PTR(-EIO);
+		err = -EIO;
 		goto cleanup;
 	}
 
@@ -95,10 +97,10 @@ struct inode *winterfs_iget (struct super_block *sb, u64 ino)
 cleanup:
 	make_bad_inode(inode);
 	iget_failed(inode);
-	return err;
+	return ERR_PTR(err);
 }
 
-struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino)
+struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, struct buffer_head **bh_out)
 {
 	struct buffer_head *bh;
 	struct winterfs_inode *wf_inode;
@@ -122,7 +124,7 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino)
 	}
 
 	memcpy(wf_inode, bh->b_data + offset, sizeof(struct winterfs_inode));
-	brelse(bh);
+	*bh_out = bh;
 
 	return wf_inode;
 }

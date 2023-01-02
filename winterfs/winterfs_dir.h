@@ -32,6 +32,8 @@ struct winterfs_dir_block_info {
 	u32 inode_list[WINTERFS_FILES_PER_DIR_BLOCK-1];
 	u32 hash_list[WINTERFS_FILES_PER_DIR_BLOCK-1];
 	struct winterfs_filename files[WINTERFS_FILES_PER_DIR_BLOCK-1];
+	struct winterfs_dir_block *db;
+	struct buffer_head *bh;
 };
 
 extern const struct file_operations winterfs_dir_operations;
