@@ -71,6 +71,7 @@ struct winterfs_inode_info {
 extern const struct inode_operations winterfs_file_inode_operations;
 extern const struct inode_operations winterfs_dir_inode_operations;
 
+u32 winterfs_inode_num_blocks(struct inode *inode);
 struct inode *winterfs_new_inode(struct inode *dir, umode_t mode,
 	const struct qstr *qstr);
 struct inode *winterfs_iget (struct super_block *sb, u32 ino);

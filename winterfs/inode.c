@@ -7,39 +7,44 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
+u32 winterfs_inode_num_blocks(struct inode *inode)
+{
+	return (inode->i_size / WINTERFS_BLOCK_SIZE) + ((inode->i_size % WINTERFS_BLOCK_SIZE) != 0);
+}
+
 static u32 winterfs_get_block_idx(struct inode *inode, u32 block) 
 {
 	u32 inode_num_blocks;
-	u32 idx;
+	u32 idx = WINTERFS_NULL_INODE;
+	struct winterfs_inode_info *wfs_info = inode->i_private;
 
-	inode_num_blocks = (inode->i_size / WINTERFS_BLOCK_SIZE) + ((inode->i_size % WINTERFS_BLOCK_SIZE) != 0);
+	if (!wfs_info) {
+		printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
+		return idx;
+	}
+
+	inode_num_blocks = winterfs_inode_num_blocks(inode);
 	if (block >= inode_num_blocks) {
 		printk(KERN_ERR "Inode block index out of bounds\n");
-		return WINTERFS_NULL_INODE;
+		return idx;
 	}
 
 	if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT) {
-		struct buffer_head *bh;
-		struct super_block *sb = inode->i_sb;
-		u8 pidx = (block * (WINTERFS_BLOCK_SIZE / 4)) / WINTERFS_BLOCK_SIZE;
-		u16 off = (block * (WINTERFS_BLOCK_SIZE / 4)) % WINTERFS_BLOCK_SIZE;
-		struct winterfs_inode_info *wfs_info = inode->i_private;
-		if (!wfs_info) {
-			printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
-			return WINTERFS_NULL_INODE;
-		}
-		bh = sb_bread(sb, wfs_info->direct_blocks[pidx]);
-		if (!bh) {
-			printk(KERN_ERR "Error reading specified data block\n");
-			brelse(bh);
-			return WINTERFS_NULL_INODE;
-		}
-		memcpy(&idx, bh->b_data+off, sizeof(idx));
-		brelse(bh);
-	// TODO
+		idx = wfs_info->direct_blocks[block];
 	} else if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT
 			 + WINTERFS_NUM_BLOCK_IDX_IND1) {
-
+		u8 pidx = (block * (WINTERFS_BLOCK_SIZE / 4)) / WINTERFS_BLOCK_SIZE;
+		u16 off = (block * (WINTERFS_BLOCK_SIZE / 4)) % WINTERFS_BLOCK_SIZE;
+		struct super_block *sb = inode->i_sb;
+		struct buffer_head *bh = sb_bread(sb, wfs_info->direct_blocks[pidx]);
+		if (!bh) {
+			printk(KERN_ERR "Error reading specified data block\n");
+			return idx;
+		}
+		idx = le32_to_cpu(*((__le32 *)bh->b_data+off));
+		printk(KERN_ERR "DATA BLOCK IDX: %d\n", idx);
+		brelse(bh);
+	// TODO
 	} else if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT
 			 + WINTERFS_NUM_BLOCK_IDX_IND1
 			 + WINTERFS_NUM_BLOCK_IDX_IND2) {
@@ -48,8 +53,6 @@ static u32 winterfs_get_block_idx(struct inode *inode, u32 block)
 			 + WINTERFS_NUM_BLOCK_IDX_IND1
 			 + WINTERFS_NUM_BLOCK_IDX_IND2
 			 + WINTERFS_NUM_BLOCK_IDX_IND3) {
-	} else {
-		return WINTERFS_NULL_INODE;
 	}
 
 	return idx;
@@ -177,7 +180,3 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, str
 	*bh_out = bh;
 	return (struct winterfs_inode *) bh->b_data;
 }
-
-
-
-
