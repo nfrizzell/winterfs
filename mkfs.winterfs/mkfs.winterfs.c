@@ -15,7 +15,7 @@
 #define WINTERFS_SUPERBLOCK_LBA         0
 #define WINTERFS_INODES_LBA         	1
 
-#define WINTERFS_INODE_PRIMARY_BLOCKS   8
+#define WINTERFS_INODE_DIRECT_BLOCKS	8
 #define WINTERFS_INODE_SIZE             128
 #define WINTERFS_INODE_FILE             0
 #define WINTERFS_INODE_DIR              1
@@ -61,10 +61,10 @@ struct winterfs_inode {
         uint8_t filename_len; // names are placed at the beginning of the first data block
 	uint8_t type;
 	uint8_t pad[46]; // reserved for metadata
-	uint32_t primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
-	uint32_t secondary_blocks;
-	uint32_t tertiary_blocks;
-	uint32_t quaternary_blocks;
+	uint32_t direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
+	uint32_t indirect_primary;
+	uint32_t indirect_secondary;
+	uint32_t indirect_tertiary;
 } __attribute__((packed));
 
 struct winterfs_superblock {
@@ -139,7 +139,7 @@ int write_root_dir_inode(FILE *dev, struct winterfs_free_blocks *fb)
 		.access_time = (uint32_t)time(NULL),
 		.type = WINTERFS_INODE_DIR,
 	};
-	root.primary_blocks[0] = get_next_free_block(fb);
+	root.direct_blocks[0] = get_next_free_block(fb);
 
 	fseek(dev, WINTERFS_BLOCK_SIZE * WINTERFS_INODES_LBA, SEEK_SET);
         if(!fwrite(&root, sizeof(root), 1, dev)) {

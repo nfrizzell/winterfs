@@ -1,14 +1,64 @@
 #include <linux/buffer_head.h>
 #include <linux/fs.h>
+#include <linux/slab.h>
 #include "winterfs.h"
 #include "winterfs_dir.h"
 #include "winterfs_file.h"
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
+static u32 winterfs_get_block_idx(struct inode *inode, u32 block) 
+{
+	u32 inode_num_blocks;
+	u32 idx;
+
+	inode_num_blocks = (inode->i_size / WINTERFS_BLOCK_SIZE) + ((inode->i_size % WINTERFS_BLOCK_SIZE) != 0);
+	if (block >= inode_num_blocks) {
+		printk(KERN_ERR "Inode block index out of bounds\n");
+		return WINTERFS_NULL_INODE;
+	}
+
+	if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT) {
+		struct buffer_head *bh;
+		struct super_block *sb = inode->i_sb;
+		u8 pidx = (block * (WINTERFS_BLOCK_SIZE / 4)) / WINTERFS_BLOCK_SIZE;
+		u16 off = (block * (WINTERFS_BLOCK_SIZE / 4)) % WINTERFS_BLOCK_SIZE;
+		struct winterfs_inode_info *wfs_info = inode->i_private;
+		if (!wfs_info) {
+			printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
+			return WINTERFS_NULL_INODE;
+		}
+		bh = sb_bread(sb, wfs_info->direct_blocks[pidx]);
+		if (!bh) {
+			printk(KERN_ERR "Error reading specified data block\n");
+			brelse(bh);
+			return WINTERFS_NULL_INODE;
+		}
+		memcpy(&idx, bh->b_data+off, sizeof(idx));
+		brelse(bh);
+	// TODO
+	} else if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT
+			 + WINTERFS_NUM_BLOCK_IDX_IND1) {
+
+	} else if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT
+			 + WINTERFS_NUM_BLOCK_IDX_IND1
+			 + WINTERFS_NUM_BLOCK_IDX_IND2) {
+
+	} else if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT
+			 + WINTERFS_NUM_BLOCK_IDX_IND1
+			 + WINTERFS_NUM_BLOCK_IDX_IND2
+			 + WINTERFS_NUM_BLOCK_IDX_IND3) {
+	} else {
+		return WINTERFS_NULL_INODE;
+	}
+
+	return idx;
+}
+
 struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 	const struct qstr *qstr)
 {
+	int i;
 	struct super_block *sb;
 	struct winterfs_sb_info *sbi;
 	struct buffer_head *bbh;
@@ -21,7 +71,9 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 	bidx = sbi->free_inode_bitset_idx;
 	num_bitset_blocks = (sbi->num_inodes / (WINTERFS_BLOCK_SIZE * 8)) + ((sbi->num_inodes % (BLOCK_SIZE * 8)) != 0);
 
-	for (int i = 0; i < num_bitset_blocks; i++) {
+	printk(KERN_ERR "New inode stats pt1: bidx: %u num_bitset_blocks: %u\n", bidx, num_bitset_blocks);
+
+	for (i = 0; i < num_bitset_blocks; i++) {
 		int num_bits;
 		int zero_bit;
 		u32 idx;
@@ -31,9 +83,11 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 		if (!bbh) {
 			return ERR_PTR(-EIO);
 		}
+
 		num_bits = 8 * WINTERFS_BLOCK_SIZE;
 		zero_bit = find_first_zero_bit_le(bbh->b_data, num_bits);
 		if (zero_bit != num_bits) {
+			printk(KERN_ERR "New inode stats pt2: num_bits: %u zero_bit: %u idx: %u\n", num_bits, zero_bit, idx);
 			bbh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
 			mark_buffer_dirty(bbh);
 			free_inode = (i * 8 * WINTERFS_BLOCK_SIZE) + zero_bit;
@@ -43,6 +97,7 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 		brelse(bbh);
 	}
 	if (!free_inode) {
+		printk("Zero bit not found\n");
 		return ERR_PTR(-ENOMEM);
 	}
 	return inode;
@@ -65,7 +120,6 @@ struct inode *winterfs_iget (struct super_block *sb, u32 ino)
 	}
 
 	wfs_inode = winterfs_get_inode(sb, ino, &bh);
-	brelse(bh);
 	if (IS_ERR(wfs_inode)) {
 		err = PTR_ERR(wfs_inode);
 		goto cleanup;
@@ -83,8 +137,8 @@ struct inode *winterfs_iget (struct super_block *sb, u32 ino)
                 inode->i_op = &winterfs_file_inode_operations;
                 inode->i_fop = &winterfs_file_operations;
 	} else if (S_ISDIR(inode->i_mode)) {
-                inode->i_op = &simple_dir_inode_operations;
-                inode->i_fop = &simple_dir_operations;
+                inode->i_op = &winterfs_dir_inode_operations;
+                inode->i_fop = &winterfs_dir_operations;
 	} else {
 		err = -EIO;
 		goto cleanup;
@@ -92,9 +146,12 @@ struct inode *winterfs_iget (struct super_block *sb, u32 ino)
 
 	unlock_new_inode(inode);
 
+	brelse(bh);
+
 	return inode;
 
 cleanup:
+	brelse(bh);
 	make_bad_inode(inode);
 	iget_failed(inode);
 	return ERR_PTR(err);
@@ -103,7 +160,6 @@ cleanup:
 struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, struct buffer_head **bh_out)
 {
 	struct buffer_head *bh;
-	struct winterfs_inode *wf_inode;
 	u32 inode_block; 	
 	u32 inode_block_idx;
 	u16 offset; 
@@ -118,13 +174,10 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, str
 		return ERR_PTR(-EIO);
 	}
 
-	wf_inode = kzalloc(sizeof(struct winterfs_inode), GFP_KERNEL);
-	if (!wf_inode) {
-		return ERR_PTR(-ENOMEM);
-	}
-
-	memcpy(wf_inode, bh->b_data + offset, sizeof(struct winterfs_inode));
 	*bh_out = bh;
-
-	return wf_inode;
+	return (struct winterfs_inode *) bh->b_data;
 }
+
+
+
+

@@ -1,4 +1,5 @@
 #include <linux/buffer_head.h>
+#include <linux/slab.h>
 #include <linux/fs.h>
 #include "winterfs.h"
 #include "winterfs_dir.h"
@@ -35,9 +36,19 @@ cleanup:
 static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry, 
 	unsigned int flags)
 {
+	struct winterfs_dir_block_info *wdbi;
+	struct super_block *sb;
+
 	if (dentry->d_name.len > WINTERFS_FILENAME_MAX_LEN) {
 		return ERR_PTR(-ENAMETOOLONG);
 	}
+
+	sb = dir->i_sb;
+
+	wdbi = winterfs_dir_load_block(sb, 0);
+
+	printk(KERN_ERR "dir name: %s\n", dentry->d_name.name);
+	return NULL;
 }
 
 static int winterfs_create (struct user_namespace *mnt_userns, struct inode *dir,
@@ -64,6 +75,7 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 const struct inode_operations winterfs_dir_inode_operations = {
 	.mkdir		= winterfs_mkdir,
 	.create		= winterfs_create,
+	.lookup		= winterfs_lookup
 };
 
 const struct file_operations winterfs_dir_operations = {

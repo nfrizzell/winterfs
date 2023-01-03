@@ -5,15 +5,41 @@
 #include <linux/fs.h>
 #include "winterfs.h"
 
-#define WINTERFS_INODE_PRIMARY_BLOCKS 	8
+#define WINTERFS_NULL_INODE		0
+
 #define WINTERFS_INODE_SIZE 		128
 #define WINTERFS_INODE_FILE 		0
 #define WINTERFS_INODE_DIR 		1
 
-#define WINTERFS_MAX_FILE_SIZE	WINTERFS_INODE_PRIMARY_BLOCKS * WINTERFS_BLOCK_SIZE + \
-	(WINTERFS_BLOCK_SIZE * WINTERFS_BLOCK_SIZE / 4) + \
-	(WINTERFS_BLOCK_SIZE * WINTERFS_BLOCK_SIZE / 16) + \
-	(WINTERFS_BLOCK_SIZE / 256 * WINTERFS_BLOCK_SIZE * WINTERFS_BLOCK_SIZE)
+#define WINTERFS_INODE_DIRECT_BLOCKS 	8
+
+#define WINTERFS_NUM_BLOCK_IDX_DIRECT	\
+	WINTERFS_INODE_DIRECT_BLOCKS
+
+#define WINTERFS_NUM_BLOCK_IDX_IND1	\
+	WINTERFS_BLOCK_SIZE / 4LL 	\
+
+#define WINTERFS_NUM_BLOCK_IDX_IND2	\
+	(WINTERFS_BLOCK_SIZE / 16LL)  	\
+	* WINTERFS_BLOCK_SIZE
+
+#define WINTERFS_NUM_BLOCK_IDX_IND3	\
+	(WINTERFS_BLOCK_SIZE / 64LL) 	\
+	* WINTERFS_BLOCK_SIZE	 	\
+	* WINTERFS_BLOCK_SIZE
+
+#define WINTERFS_MAX_FILE_SIZE		\
+	WINTERFS_INODE_DIRECT_BLOCKS 	\
+	* WINTERFS_BLOCK_SIZE		\
+					\
+	+ WINTERFS_NUM_BLOCK_IDX_IND1	\
+	* WINTERFS_BLOCK_SIZE	 	\
+					\
+	+ WINTERFS_NUM_BLOCK_IDX_IND2	\
+	* WINTERFS_BLOCK_SIZE	 	\
+					\
+	+ WINTERFS_NUM_BLOCK_IDX_IND3	\
+	* WINTERFS_BLOCK_SIZE	 	\
 
 #define WINTERFS_TIME_RES 		1000000 // 1 second
 
@@ -26,20 +52,20 @@ struct winterfs_inode {
 	u8 filename_len; // filenames are placed in their own block
         u8 type;
 	u8 pad[46]; // reserved for metadata
-	__le32 primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
-        __le32 secondary_blocks;
-	__le32 tertiary_blocks;
-	__le32 quaternary_blocks;
+	__le32 direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
+	__le32 indirect_primary;
+        __le32 indirect_secondary;
+	__le32 indirect_tertiary;
 
 } __attribute__((packed));
 
 // in-memory structure
 struct winterfs_inode_info {
         u8 type;
-	u32 primary_blocks[WINTERFS_INODE_PRIMARY_BLOCKS];
-        u32 secondary_blocks;
-	u32 tertiary_blocks;
-	u32 quaternary_blocks;
+	u32 direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
+	u32 indirect_primary;
+        u32 indirect_secondary;
+	u32 indirect_tertiary;
 };
 
 extern const struct inode_operations winterfs_file_inode_operations;
