@@ -12,7 +12,7 @@ u32 winterfs_inode_num_blocks(struct inode *inode)
 	return (inode->i_size / WINTERFS_BLOCK_SIZE) + ((inode->i_size % WINTERFS_BLOCK_SIZE) != 0);
 }
 
-static u32 winterfs_get_block_idx(struct inode *inode, u32 block) 
+static u32 winterfs_translate_block_idx(struct inode *inode, u32 block) 
 {
 	u32 inode_num_blocks;
 	u32 idx = WINTERFS_NULL_INODE;
@@ -106,7 +106,7 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 	return inode;
 }
 
-struct inode *winterfs_iget (struct super_block *sb, u32 ino)
+struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 {
 	struct inode *inode;
 	struct winterfs_inode *wfs_inode;
