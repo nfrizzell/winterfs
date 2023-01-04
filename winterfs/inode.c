@@ -42,7 +42,6 @@ static u32 winterfs_translate_block_idx(struct inode *inode, u32 block)
 			return idx;
 		}
 		idx = le32_to_cpu(*((__le32 *)bh->b_data+off));
-		printk(KERN_ERR "DATA BLOCK IDX: %d\n", idx);
 		brelse(bh);
 	// TODO
 	} else if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT
@@ -74,7 +73,6 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 	bidx = sbi->free_inode_bitset_idx;
 	num_bitset_blocks = (sbi->num_inodes / (WINTERFS_BLOCK_SIZE * 8)) + ((sbi->num_inodes % (BLOCK_SIZE * 8)) != 0);
 
-	printk(KERN_ERR "New inode stats pt1: bidx: %u num_bitset_blocks: %u\n", bidx, num_bitset_blocks);
 
 	for (i = 0; i < num_bitset_blocks; i++) {
 		int num_bits;
@@ -90,7 +88,6 @@ struct inode *winterfs_new_inode(struct inode *inode, umode_t mode,
 		num_bits = 8 * WINTERFS_BLOCK_SIZE;
 		zero_bit = find_first_zero_bit_le(bbh->b_data, num_bits);
 		if (zero_bit != num_bits) {
-			printk(KERN_ERR "New inode stats pt2: num_bits: %u zero_bit: %u idx: %u\n", num_bits, zero_bit, idx);
 			bbh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
 			mark_buffer_dirty(bbh);
 			free_inode = (i * 8 * WINTERFS_BLOCK_SIZE) + zero_bit;

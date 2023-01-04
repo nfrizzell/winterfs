@@ -8,7 +8,6 @@
 
 struct winterfs_filename *winterfs_dir_block_filename(struct winterfs_dir_block_info *db_info, u8 idx)
 {
-	printk(KERN_ERR "FILENAME: %s\n", db_info->db->files[idx].name);
 	return &(db_info->db->files[idx]);
 }
 
@@ -37,7 +36,6 @@ static struct winterfs_dir_block_info *winterfs_dir_load_block(struct super_bloc
 	wdbi->free_bitmap = le16_to_cpu(wdb->free_bitmap);
 	for (i = 0; i < WINTERFS_FILES_PER_DIR_BLOCK; i++) {
 		wdbi->inode_list[i] = le32_to_cpu(wdb->inode_list[i]);
-		printk(KERN_ERR "DIR INODE %d: %d\n", i, wdbi->inode_list[i]);
 	}
 
 	return wdbi;
@@ -65,7 +63,6 @@ static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry,
 	}
 
 	dir_num_blocks = winterfs_inode_num_blocks(dir);
-	printk(KERN_ERR "DIR NUM BLOCKS: %d\n", dir_num_blocks);
 	for (block = 0; block < dir_num_blocks; block++) {
 		u8 file_idx;
 		u32 abs_block = block + sbi->data_blocks_idx;
@@ -76,10 +73,8 @@ static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry,
 		for (file_idx = 0; file_idx < WINTERFS_FILES_PER_DIR_BLOCK; file_idx++) {
 			u32 ino = wdbi->inode_list[file_idx];
 			struct winterfs_filename *filename = winterfs_dir_block_filename(wdbi, file_idx);
-			printk(KERN_ERR "FILE IDX: %d INO: %d\n", file_idx, ino);
 			if (strncmp(filename->name, dentry->d_name.name, WINTERFS_FILENAME_MAX_LEN) == 0) {
 				struct inode *inode = winterfs_iget(sb, ino);
-				printk(KERN_ERR "MATCH FOUND\n");
 				brelse(wdbi->bh);
 				kfree(wdbi);
 				return d_splice_alias(inode, dentry);
@@ -147,9 +142,18 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
         struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	struct inode *inode;
+	int err;
 
-	printk(KERN_ERR "MKDIR\n");
+	inode_inc_link_count(dir);
+
 	inode = winterfs_new_inode(dir, S_IFDIR | mode, &(dentry->d_name));
+
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto err;
+	}
+
+	inode_inc_link_count(inode);
 
 	inode->i_op = &winterfs_dir_inode_operations;
         inode->i_fop = &winterfs_dir_operations;
@@ -157,6 +161,9 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 	d_instantiate_new(dentry, inode);
 
 	return 0;
+err:
+	inode_dec_link_count(dir);
+	return err;
 }
 
 const struct inode_operations winterfs_dir_inode_operations = {
