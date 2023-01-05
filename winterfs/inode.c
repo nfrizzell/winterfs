@@ -60,6 +60,7 @@ u32 winterfs_translate_block_idx(struct inode *inode, u32 block)
 struct inode *winterfs_new_inode(struct inode *dir)
 {
 	int i;
+	u32 num_bits;
 	u32 bidx;
 	u32 free_ino;
 	u32 num_bitset_blocks;
@@ -77,9 +78,9 @@ struct inode *winterfs_new_inode(struct inode *dir)
 	sbi = sb->s_fs_info;
 	bidx = sbi->free_inode_bitset_idx;
 	num_bitset_blocks = (sbi->num_inodes / (WINTERFS_BLOCK_SIZE * 8)) + ((sbi->num_inodes % (BLOCK_SIZE * 8)) != 0);
+	num_bits = 8 * WINTERFS_BLOCK_SIZE;
 
 	for (i = 0; i < num_bitset_blocks; i++) {
-		int num_bits;
 		int zero_bit;
 		u32 idx;
 
@@ -89,8 +90,8 @@ struct inode *winterfs_new_inode(struct inode *dir)
 			return ERR_PTR(-EIO);
 		}
 
-		num_bits = 8 * WINTERFS_BLOCK_SIZE;
 		zero_bit = find_first_zero_bit_le(bh->b_data, num_bits);
+		printk(KERN_ERR "zero bit: %d\n", zero_bit);
 		if (zero_bit != num_bits) {
 			bh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
 			mark_buffer_dirty(bh);
@@ -100,7 +101,7 @@ struct inode *winterfs_new_inode(struct inode *dir)
 		}
 		brelse(bh);
 	}
-	if (!free_ino) {
+	if (free_ino == num_bits) {
 		printk("Free inode not found\n");
 		return ERR_PTR(-ENOMEM);
 	}

@@ -161,10 +161,10 @@ int format_device(char *device_path)
 	}
 
 	struct winterfs_inode root = {
-		.size = WINTERFS_BLOCK_SIZE,
-		.create_time = (uint32_t)time(NULL),
-		.modify_time = (uint32_t)time(NULL),
-		.access_time = (uint32_t)time(NULL),
+		.size = le64(WINTERFS_BLOCK_SIZE),
+		.create_time = le64((uint32_t)time(NULL)),
+		.modify_time = le64((uint32_t)time(NULL)),
+		.access_time = le64((uint32_t)time(NULL)),
 		.type = WINTERFS_INODE_DIR,
 	};
 	root.direct_blocks[0] = get_next_free_bit(&fb);
