@@ -15,18 +15,21 @@ u32 winterfs_inode_num_blocks(struct inode *inode)
 u32 winterfs_translate_block_idx(struct inode *inode, u32 block) 
 {
 	u32 inode_num_blocks;
-	u32 idx = WINTERFS_NULL_INODE;
+	u32 idx = 0;
+	struct super_block *sb = inode->i_sb;
+	struct winterfs_sb_info *sbi = sb->s_fs_info;
 	struct winterfs_inode_info *wfs_info = inode->i_private;
+	u32 data_blocks_idx = sbi->data_blocks_idx;
 
 	if (!wfs_info) {
 		printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
-		return WINTERFS_NULL_INODE;
+		return 0;
 	}
 
 	inode_num_blocks = winterfs_inode_num_blocks(inode);
 	if (block >= inode_num_blocks) {
 		printk(KERN_ERR "Inode block index out of bounds\n");
-		return WINTERFS_NULL_INODE;
+		return 0;
 	}
 
 	if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT) {
@@ -54,7 +57,7 @@ u32 winterfs_translate_block_idx(struct inode *inode, u32 block)
 			 + WINTERFS_NUM_BLOCK_IDX_IND3) {
 	}
 
-	return idx;
+	return data_blocks_idx + idx;
 }
 
 struct inode *winterfs_new_inode(struct inode *dir)
@@ -90,8 +93,7 @@ struct inode *winterfs_new_inode(struct inode *dir)
 			return ERR_PTR(-EIO);
 		}
 
-		zero_bit = find_first_zero_bit_le(bh->b_data, num_bits);
-		printk(KERN_ERR "zero bit: %d\n", zero_bit);
+		zero_bit = find_first_zero_bit((unsigned long*)bh->b_data, num_bits);
 		if (zero_bit != num_bits) {
 			bh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
 			mark_buffer_dirty(bh);

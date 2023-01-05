@@ -98,13 +98,11 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 	loff_t pos = ctx->pos;
 	int count = 0;
 
-	if (pos > inode->i_size) {
-		return count;	
-	}
-
 	dir_emit_dots(dir, ctx);
 
-	ctx->pos += WINTERFS_BLOCK_SIZE;
+	if (pos >= inode->i_size) {
+		return count;	
+	}
 
         if (!wfs_info) {
                 printk(KERN_ERR "Attempt to read data from improperly loaded inode: %lu\n", inode->i_ino);
@@ -112,6 +110,7 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
         }
 
 	block_idx = pos / WINTERFS_BLOCK_SIZE;
+	printk(KERN_ERR "block idx: %d", block_idx);
 	translated_idx = winterfs_translate_block_idx(inode, block_idx);
 	if (!translated_idx) {
 		printk(KERN_ERR "Attempt to access invalid inode block: %d\n", translated_idx);
@@ -132,6 +131,7 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 	}
 
 	winterfs_free_dir_block_info(wdbi);
+	ctx->pos += WINTERFS_BLOCK_SIZE;
 
 	return count;
 }
@@ -197,7 +197,6 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *dir,
 
 	sb = dir->i_sb;
 	dir_num_blocks = winterfs_inode_num_blocks(dir);
-
 	for (block = 0; (res != 0) && block < dir_num_blocks; block++) {
 		u8 i;
 		u32 translated_block = winterfs_translate_block_idx(dir, block);

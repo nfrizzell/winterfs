@@ -89,7 +89,7 @@ int get_next_free_bit(struct winterfs_bitset *bs)
 			while (bit >= 0) {
 				if (!((1 << bit) & bs->bitset[i])) {
 					bs->bitset[i] |= (1 << bit);
-					return (8 * i) + (7 - bit);
+					return (8 * i) + (8 - bit);
 				}
 				bit--;
 			}
@@ -181,7 +181,7 @@ int format_device(char *device_path)
 		printf("Failed writing free inode bitset\n");
 		goto cleanup;
 	}
-
+	
 	fseek(dev, WINTERFS_BLOCK_SIZE * free_block_bitset_idx, SEEK_SET);
 	if (!fwrite(fb.bitset, sizeof(fi.bitset), 1, dev)) {
 		printf("Failed writing free block bitset\n");

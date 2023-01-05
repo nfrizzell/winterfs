@@ -13,3 +13,4 @@ sudo umount ${MOUNT_DIR} || true
 sudo rmmod -f winterfs || true
 sudo modprobe winterfs
 sudo mount -t winterfs ${LOOP_DEV} ${MOUNT_DIR}
+sudo chown ${USERNAME}:${USERNAME} ${MOUNT_DIR}
