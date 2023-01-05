@@ -12,8 +12,7 @@
 
 #define WINTERFS_BLOCK_SIZE     	4096
 
-#define WINTERFS_SUPERBLOCK_LBA         0
-#define WINTERFS_INODES_LBA         	1
+#define WINTERFS_SUPERBLOCK_BLOCK_ADDR  0
 
 #define WINTERFS_INODE_DIRECT_BLOCKS	8
 #define WINTERFS_INODE_SIZE             128
@@ -77,19 +76,19 @@ struct winterfs_superblock {
         uint32_t data_blocks_idx;
 } __attribute__((packed));
 
-struct winterfs_free_blocks {
+struct winterfs_bitset {
 	uint32_t size;
 	uint8_t * bitset;
 } __attribute__((packed));
 
-int get_next_free_block(struct winterfs_free_blocks *fb)
+int get_next_free_bit(struct winterfs_bitset *bs)
 {
-	for (size_t i = 0; i < fb->size; i++) {
-		if (fb->bitset[i] != 0xFF) {
+	for (size_t i = 0; i < bs->size; i++) {
+		if (bs->bitset[i] != 0xFF) {
 			int bit = 7;
 			while (bit >= 0) {
-				if (!((1 << bit) & fb->bitset[i])) {
-					fb->bitset[i] |= (1 << bit);
+				if (!((1 << bit) & bs->bitset[i])) {
+					bs->bitset[i] |= (1 << bit);
 					return (8 * i) + (7 - bit);
 				}
 				bit--;
@@ -98,62 +97,6 @@ int get_next_free_block(struct winterfs_free_blocks *fb)
 	}
 
 	return 0; // err inode
-}
-
-int write_superblock(FILE *dev, uint32_t num_blocks, uint32_t num_inodes)
-{
-	uint32_t num_inode_blocks = ((num_inodes * WINTERFS_INODE_SIZE) / WINTERFS_BLOCK_SIZE) + (((num_inodes * WINTERFS_INODE_SIZE) % WINTERFS_BLOCK_SIZE) != 0);
-	uint32_t num_inode_bitset_blocks = (num_inode_blocks / (8 * WINTERFS_BLOCK_SIZE)) + (num_inode_blocks % (8 * WINTERFS_BLOCK_SIZE) != 0);
-	uint32_t inode_bitset_idx = num_inode_blocks;
-
-	uint32_t num_block_bitset_blocks = (num_blocks / (8 * WINTERFS_BLOCK_SIZE)) + (num_blocks % (8 * WINTERFS_BLOCK_SIZE) != 0);
-	uint32_t free_block_bitset_idx = inode_bitset_idx + num_inode_bitset_blocks;
-	uint32_t bad_block_bitset_idx = free_block_bitset_idx + num_block_bitset_blocks;
-	uint32_t data_block_idx = bad_block_bitset_idx + num_block_bitset_blocks;
-
-	struct winterfs_superblock sb = {
-		.magic = {0x57, 0x4e, 0x46, 0x53},
-		.num_blocks = le32(num_blocks), 
-		.num_inodes = le32(num_inodes),
-		.free_inode_bitset_idx = le32(num_inode_blocks),
-		.free_block_bitset_idx = le32(free_block_bitset_idx),
-		.bad_block_bitset_idx = le32(bad_block_bitset_idx),
-		.data_blocks_idx = le32(data_block_idx),
-	};
-
-	fseek(dev, 0, SEEK_SET);
-	if(!fwrite(&sb, sizeof(sb), 1, dev)) {
-		printf("Failed writing superblock\n");
-		return 1;
-	}
-
-	return 0;	
-}
-
-int write_root_dir_inode(FILE *dev, struct winterfs_free_blocks *fb)
-{
-	struct winterfs_inode root = {
-		.size = WINTERFS_BLOCK_SIZE,
-		.create_time = (uint32_t)time(NULL),
-		.modify_time = (uint32_t)time(NULL),
-		.access_time = (uint32_t)time(NULL),
-		.type = WINTERFS_INODE_DIR,
-	};
-	root.direct_blocks[0] = get_next_free_block(fb);
-
-	fseek(dev, WINTERFS_BLOCK_SIZE * WINTERFS_INODES_LBA, SEEK_SET);
-        if(!fwrite(&root, sizeof(root), 1, dev)) {
-                printf("Failed writing root inode\n");
-                return 1;
-        }
-
-	return 0;
-}
-
-int write_free_block_bitset(FILE *dev, struct winterfs_free_blocks *fb)
-{
-
-	return 0;
 }
 
 int format_device(char *device_path)
@@ -181,28 +124,73 @@ int format_device(char *device_path)
 	uint32_t num_blocks = block_dev_size_bytes / WINTERFS_BLOCK_SIZE;
 	uint32_t num_inodes = block_dev_size_bytes / WINTERFS_INODE_RATIO;
 
-	struct winterfs_free_blocks fb = {
+	uint32_t num_inode_blocks = ((num_inodes * WINTERFS_INODE_SIZE) / WINTERFS_BLOCK_SIZE) + (((num_inodes * WINTERFS_INODE_SIZE) % WINTERFS_BLOCK_SIZE) != 0);
+
+	uint32_t num_inode_bitset_blocks = (num_inode_blocks / (8 * WINTERFS_BLOCK_SIZE)) + (num_inode_blocks % (8 * WINTERFS_BLOCK_SIZE) != 0);
+	uint32_t free_inode_bitset_idx = (WINTERFS_SUPERBLOCK_BLOCK_ADDR+1) + num_inode_blocks;
+
+	uint32_t num_block_bitset_blocks = (num_blocks / (8 * WINTERFS_BLOCK_SIZE)) + (num_blocks % (8 * WINTERFS_BLOCK_SIZE) != 0);
+	uint32_t free_block_bitset_idx = free_inode_bitset_idx + num_inode_bitset_blocks;
+	uint32_t bad_block_bitset_idx = free_block_bitset_idx + num_block_bitset_blocks;
+	uint32_t data_block_idx = bad_block_bitset_idx + num_block_bitset_blocks;
+
+	struct winterfs_bitset fi = {
+		.size = num_inodes,
+		.bitset = calloc((num_inodes / 8) + (num_inodes % 8 != 0), 1)
+	};
+
+	struct winterfs_bitset fb = {
 		.size = num_blocks,
 		.bitset = calloc((num_blocks / 8) + (num_blocks % 8 != 0), 1)
 	};
+	
+	struct winterfs_superblock sb = {
+		.magic = {0x57, 0x4e, 0x46, 0x53},
+		.num_blocks = le32(num_blocks), 
+		.num_inodes = le32(num_inodes),
+		.free_inode_bitset_idx = le32(free_inode_bitset_idx),
+		.free_block_bitset_idx = le32(free_block_bitset_idx),
+		.bad_block_bitset_idx = le32(bad_block_bitset_idx),
+		.data_blocks_idx = le32(data_block_idx),
+	};
 
-	err = write_superblock(dev, num_blocks, num_inodes);
-	if (err) {
+	fseek(dev, 0, SEEK_SET);
+	if(!fwrite(&sb, sizeof(sb), 1, dev)) {
+		printf("Failed writing superblock\n");
 		goto cleanup;
 	}
 
-	err = write_root_dir_inode(dev, &fb);
-	if (err) {
+	struct winterfs_inode root = {
+		.size = 0,
+		.create_time = (uint32_t)time(NULL),
+		.modify_time = (uint32_t)time(NULL),
+		.access_time = (uint32_t)time(NULL),
+		.type = WINTERFS_INODE_DIR,
+	};
+	root.direct_blocks[0] = get_next_free_bit(&fb);
+	get_next_free_bit(&fi);
+
+	fseek(dev, WINTERFS_BLOCK_SIZE * (WINTERFS_SUPERBLOCK_BLOCK_ADDR+1), SEEK_SET);
+        if(!fwrite(&root, sizeof(root), 1, dev)) {
+                printf("Failed writing root inode\n");
+		goto cleanup;
+        }
+
+	fseek(dev, WINTERFS_BLOCK_SIZE * free_inode_bitset_idx, SEEK_SET);
+	if (!fwrite(fi.bitset, sizeof(fi.bitset), 1, dev)) {
+		printf("Failed writing free inode bitset\n");
 		goto cleanup;
 	}
 
-	err = write_free_block_bitset(dev, &fb);
-	if (err) {
+	fseek(dev, WINTERFS_BLOCK_SIZE * free_block_bitset_idx, SEEK_SET);
+	if (!fwrite(fb.bitset, sizeof(fi.bitset), 1, dev)) {
+		printf("Failed writing free block bitset\n");
 		goto cleanup;
 	}
 
 cleanup:
 	fclose(dev);
+	free(fi.bitset);
 	free(fb.bitset);
 err:
 	return err;

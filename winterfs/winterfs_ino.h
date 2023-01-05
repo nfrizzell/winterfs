@@ -62,7 +62,6 @@ struct winterfs_inode {
 // in-memory structure
 struct winterfs_inode_info {
         u8 type;
-	u32 parent_inode;
 	u32 direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
 	u32 indirect_primary;
         u32 indirect_secondary;
