@@ -25,7 +25,7 @@ static struct winterfs_dir_block_info *winterfs_dir_load_block(struct super_bloc
 
 	bh = sb_bread(sb, block);
 	if (!bh) {
-		printk(KERN_ERR "Error reading block %u\n", block);
+		printk(KERN_ERR "Error reading directory block %u\n", block);
 		kfree(wdbi);
 		return ERR_PTR(-EIO);
 	}
@@ -64,9 +64,14 @@ static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry,
 
 	dir_num_blocks = winterfs_inode_num_blocks(dir);
 	for (block = 0; block < dir_num_blocks; block++) {
+		struct winterfs_dir_block_info *wdbi;
 		u8 file_idx;
-		u32 abs_block = block + sbi->data_blocks_idx;
-		struct winterfs_dir_block_info *wdbi = winterfs_dir_load_block(sb, abs_block);
+		u32 translated_block = winterfs_translate_block_idx(dir, block);
+		if (!translated_block) {
+			printk(KERN_WARNING "Attempt to access invalid inode block\n");
+			continue;
+		}
+		wdbi = winterfs_dir_load_block(sb, translated_block);
 		if (IS_ERR(wdbi)) {
 			return NULL;
 		}
@@ -91,15 +96,19 @@ static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry,
 static int winterfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	u8 i;
-	struct winterfs_dir_block_info *wdbi;
+	u32 block_idx;
+	u32 translated_idx;
 	struct inode *inode = file->f_inode;
-	struct winterfs_inode_info *wfs_info = inode->i_private;
+	struct winterfs_dir_block_info *wdbi;
 	struct super_block *sb = inode->i_sb;
+	struct winterfs_inode_info *wfs_info = inode->i_private;
 	loff_t pos = ctx->pos;
-	u8 count = 0;
+	int count = 0;
+
+	ctx->pos += WINTERFS_BLOCK_SIZE;
 
         if (!wfs_info) {
-                printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
+                printk(KERN_ERR "Attempt to read data from improperly loaded inode: %d\n", inode->i_ino);
                 return 0;
         }
 
@@ -107,13 +116,20 @@ static int winterfs_readdir(struct file *file, struct dir_context *ctx)
 		u32 double_ino = wfs_info->parent_inode ? wfs_info->parent_inode : inode->i_ino;
 		dir_emit(ctx, ".", 1, inode->i_ino, DT_DIR);
 		dir_emit(ctx, "..", 2, double_ino, DT_DIR);
+		count += 2;
 	} else if (pos > inode->i_size) {
-		return 0;	
+		return count;	
 	}
 
-	wdbi = winterfs_dir_load_block(sb, pos);
+	block_idx = pos / WINTERFS_BLOCK_SIZE;
+	translated_idx = winterfs_translate_block_idx(inode, block_idx);
+	if (!translated_idx) {
+		printk(KERN_ERR "Attempt to access invalid inode block: %d\n", translated_idx);
+		return count;
+	}
+	wdbi = winterfs_dir_load_block(sb, translated_idx);
 	if (IS_ERR(wdbi)) {
-                return 0;
+                return count;
         }
 	for (i = 0; i < WINTERFS_FILES_PER_DIR_BLOCK; i++) {
 		if (wdbi->inode_list[i] != 0) {
@@ -125,7 +141,6 @@ static int winterfs_readdir(struct file *file, struct dir_context *ctx)
 		}
 	}
 
-	ctx->pos += WINTERFS_BLOCK_SIZE;
 	brelse(wdbi->bh);
         kfree(wdbi);
 
@@ -146,7 +161,7 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 
 	inode_inc_link_count(dir);
 
-	inode = winterfs_new_inode(dir, S_IFDIR | mode, &(dentry->d_name));
+	inode = winterfs_new_inode(dir);
 
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);

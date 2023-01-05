@@ -1,7 +1,7 @@
 USERNAME=$(whoami)
 TEST_FILE=/home/${USERNAME}/diskimg
 MOUNT_DIR=/home/${USERNAME}/wmnt
-LOOP_DEV=/dev/loop16
+LOOP_DEV=/dev/loop7
 
 make
 sudo make install
