@@ -111,6 +111,11 @@ struct inode *winterfs_new_inode(struct inode *dir)
 	return inode;
 }
 
+void winterfs_free_inode(struct inode *inode)
+{
+	// TODO
+}
+
 struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 {
 	struct inode *inode;

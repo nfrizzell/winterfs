@@ -161,7 +161,7 @@ int format_device(char *device_path)
 	}
 
 	struct winterfs_inode root = {
-		.size = 0,
+		.size = WINTERFS_BLOCK_SIZE,
 		.create_time = (uint32_t)time(NULL),
 		.modify_time = (uint32_t)time(NULL),
 		.access_time = (uint32_t)time(NULL),
