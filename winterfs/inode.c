@@ -60,26 +60,66 @@ u32 winterfs_translate_block_idx(struct inode *inode, u32 block)
 	return data_blocks_idx + idx;
 }
 
-struct inode *winterfs_new_inode(struct inode *dir)
+u32 winterfs_allocate_data_block(struct super_block *sb)
 {
 	int i;
+	struct buffer_head *bh;
+	struct winterfs_sb_info *sbi = sb->s_fs_info;
+	u32 free_block = 0;
+	u32 num_bitset_blocks = (sbi->num_blocks / (WINTERFS_BLOCK_SIZE * 8)) + ((sbi->num_blocks % (BLOCK_SIZE * 8)) != 0);
+	u32 bitset_idx = sbi->free_block_bitset_idx;
+	u32 num_bits = WINTERFS_BLOCK_SIZE * 8;
+
+        for (i = 0; i < num_bitset_blocks; i++) {
+                int zero_bit;
+                u32 idx;
+
+                idx = bitset_idx + i;
+                bh = sb_bread(sb, idx);
+                if (!bh) {
+			return 0;
+		}
+
+                zero_bit = find_first_zero_bit((unsigned long*)bh->b_data, num_bits);
+                if (zero_bit != num_bits) {
+                        bh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
+                        mark_buffer_dirty(bh);
+                        free_block = (i * 8 * WINTERFS_BLOCK_SIZE) + zero_bit;
+                        brelse(bh);
+                        break;
+                }
+                brelse(bh);
+        }
+
+	return free_block;
+}
+
+struct inode *winterfs_new_inode(struct super_block *sb)
+{
+	int i;
+	int err;
 	u32 num_bits;
-	u32 bidx;
+	u32 bitset_idx;
 	u32 free_ino;
 	u32 num_bitset_blocks;
 	struct buffer_head *bh;
-	struct inode *inode;
-	struct super_block *sb;
 	struct winterfs_sb_info *sbi;
+	struct inode *inode;
+	struct winterfs_inode_info *wfs_info;
 
-	sb = dir->i_sb;
 	inode = new_inode(sb);
 	if (!inode) {
                 return ERR_PTR(-ENOMEM);
 	}
+	wfs_info = kzalloc(sizeof(struct winterfs_inode_info), GFP_KERNEL);
+	if (!wfs_info) {
+		err = -ENOMEM;
+		goto err_inode;
+	}
+	inode->i_private = wfs_info;
 
 	sbi = sb->s_fs_info;
-	bidx = sbi->free_inode_bitset_idx;
+	bitset_idx = sbi->free_inode_bitset_idx;
 	num_bitset_blocks = (sbi->num_inodes / (WINTERFS_BLOCK_SIZE * 8)) + ((sbi->num_inodes % (BLOCK_SIZE * 8)) != 0);
 	num_bits = 8 * WINTERFS_BLOCK_SIZE;
 
@@ -87,10 +127,11 @@ struct inode *winterfs_new_inode(struct inode *dir)
 		int zero_bit;
 		u32 idx;
 
-		idx = bidx + i;
+		idx = bitset_idx + i;
 		bh = sb_bread(sb, idx);
 		if (!bh) {
-			return ERR_PTR(-EIO);
+			err = -EIO;
+			goto err_info;
 		}
 
 		zero_bit = find_first_zero_bit((unsigned long*)bh->b_data, num_bits);
@@ -105,13 +146,22 @@ struct inode *winterfs_new_inode(struct inode *dir)
 	}
 	if (free_ino == num_bits) {
 		printk("Free inode not found\n");
-		return ERR_PTR(-ENOMEM);
+		err = -ENOMEM;
+		goto err_info;
 	}
 
 	inode->i_ino = free_ino;
+	
 	mark_inode_dirty(inode);
 
 	return inode;
+
+err_info:
+	kfree(wfs_info);
+err_inode:
+	make_bad_inode(inode);
+        iput(inode);
+	return ERR_PTR(err);
 }
 
 void winterfs_free_inode(struct inode *inode)
@@ -191,5 +241,5 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, str
 	}
 
 	*bh_out = bh;
-	return (struct winterfs_inode *) bh->b_data;
+	return (struct winterfs_inode *) (bh->b_data + offset);
 }

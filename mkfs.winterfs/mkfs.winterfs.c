@@ -85,13 +85,13 @@ int get_next_free_bit(struct winterfs_bitset *bs)
 {
 	for (size_t i = 0; i < bs->size; i++) {
 		if (bs->bitset[i] != 0xFF) {
-			int bit = 7;
-			while (bit >= 0) {
+			int bit = 0;
+			while (bit < 8) {
 				if (!((1 << bit) & bs->bitset[i])) {
 					bs->bitset[i] |= (1 << bit);
-					return (8 * i) + (8 - bit);
+					return (8 * i) + bit;
 				}
-				bit--;
+				bit++;
 			}
 		}
 	}
@@ -138,6 +138,9 @@ int format_device(char *device_path)
 		.size = num_inodes,
 		.bitset = calloc((num_inodes / 8) + (num_inodes % 8 != 0), 1)
 	};
+	// null & root ino
+	get_next_free_bit(&fi);
+	get_next_free_bit(&fi);
 
 	struct winterfs_bitset fb = {
 		.size = num_blocks,

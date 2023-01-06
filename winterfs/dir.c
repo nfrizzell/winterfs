@@ -98,7 +98,14 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 	loff_t pos = ctx->pos;
 	int count = 0;
 
-	dir_emit_dots(dir, ctx);
+        printk(KERN_ERR "readdir ino: %lu\n", inode->i_ino);
+
+	if (pos == 0) {
+		dir_emit_dot(dir, ctx);
+		dir_emit_dotdot(dir, ctx);
+	}
+
+	ctx->pos += WINTERFS_BLOCK_SIZE;
 
 	if (pos >= inode->i_size) {
 		return count;	
@@ -110,8 +117,9 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
         }
 
 	block_idx = pos / WINTERFS_BLOCK_SIZE;
-	printk(KERN_ERR "block idx: %d", block_idx);
 	translated_idx = winterfs_translate_block_idx(inode, block_idx);
+	printk(KERN_ERR "block idx: %u\n", block_idx);
+	printk(KERN_ERR "translated idx: %u\n", translated_idx);
 	if (!translated_idx) {
 		printk(KERN_ERR "Attempt to access invalid inode block: %d\n", translated_idx);
 		return count;
@@ -131,7 +139,6 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 	}
 
 	winterfs_free_dir_block_info(wdbi);
-	ctx->pos += WINTERFS_BLOCK_SIZE;
 
 	return count;
 }
@@ -145,17 +152,30 @@ static int winterfs_create(struct user_namespace *mnt_userns, struct inode *dir,
 static int winterfs_mkdir(struct user_namespace *mnt_userns,
         struct inode *dir, struct dentry *dentry, umode_t mode)
 {
-	struct inode *inode;
 	int err;
+	struct inode *inode;
+	struct buffer_head *bh;
+	struct winterfs_inode *wfs_inode;
+	struct winterfs_inode_info *wfs_info;
+	struct super_block *sb = dir->i_sb;
 
 	inode_inc_link_count(dir);
 
-	inode = winterfs_new_inode(dir);
+	inode = winterfs_new_inode(sb);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto err;
 	}
+	wfs_inode = winterfs_get_inode(sb, inode->i_ino, &bh);
+	if (IS_ERR(wfs_inode)) {
+		err = PTR_ERR(wfs_inode);
+		goto err;
+	}
 
+	// TODO: make a function to move all of this out of mkdir
+	wfs_info = inode->i_private;
+	wfs_info->direct_blocks[0] = winterfs_allocate_data_block(sb);
+	
 	inode_inc_link_count(inode);
 
 	inode->i_op = &winterfs_dir_inode_operations;
@@ -165,11 +185,19 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
         inode->i_mtime.tv_sec = ktime_get_real();
         inode->i_ctime.tv_sec = ktime_get_real();
 
-	winterfs_dir_link_inode(dentry, dir, inode);
+	wfs_inode->size = cpu_to_le32(WINTERFS_BLOCK_SIZE);
+	wfs_inode->type = WINTERFS_INODE_DIR;
+	wfs_inode->direct_blocks[0] = cpu_to_le32(wfs_info->direct_blocks[0]);
+	wfs_inode->create_time = cpu_to_le64(inode->i_ctime.tv_sec);
+	wfs_inode->modify_time = cpu_to_le64(inode->i_mtime.tv_sec);
+	wfs_inode->access_time = cpu_to_le64(inode->i_atime.tv_sec);
 
+	winterfs_dir_link_inode(dentry, dir, inode);
+	mark_buffer_dirty(bh);
 	d_instantiate_new(dentry, inode);
 
 	return 0;
+
 err:
 	inode_dec_link_count(dir);
 	return err;
