@@ -61,7 +61,6 @@ struct winterfs_inode {
 
 // in-memory structure
 struct winterfs_inode_info {
-        u8 type;
 	u32 direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
 	u32 indirect_primary;
         u32 indirect_secondary;
@@ -77,5 +76,7 @@ u32 winterfs_allocate_data_block(struct super_block *sb);
 struct inode *winterfs_new_inode(struct super_block *sb);
 struct inode *winterfs_iget (struct super_block *sb, u32 ino);
 struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, struct buffer_head **bh_out);
+int __winterfs_write_inode(struct inode *inode);
+int winterfs_write_inode(struct inode *inode, struct writeback_control *wbc);
 
 #endif // WINTERFS_INO

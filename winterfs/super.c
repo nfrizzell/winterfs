@@ -19,7 +19,8 @@ static void winterfs_put_super(struct super_block *sb)
 
 const static struct super_operations winterfs_super_operations = {
 	.put_super = winterfs_put_super,
-	.statfs = simple_statfs
+	.statfs = simple_statfs,
+	.write_inode = winterfs_write_inode
 };
 
 static int winterfs_fill_super(struct super_block *sb, void *data, int silent)

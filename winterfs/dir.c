@@ -98,8 +98,6 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 	loff_t pos = ctx->pos;
 	int count = 0;
 
-        printk(KERN_ERR "readdir ino: %lu\n", inode->i_ino);
-
 	if (pos == 0) {
 		dir_emit_dot(dir, ctx);
 		dir_emit_dotdot(dir, ctx);
@@ -118,8 +116,6 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 
 	block_idx = pos / WINTERFS_BLOCK_SIZE;
 	translated_idx = winterfs_translate_block_idx(inode, block_idx);
-	printk(KERN_ERR "block idx: %u\n", block_idx);
-	printk(KERN_ERR "translated idx: %u\n", translated_idx);
 	if (!translated_idx) {
 		printk(KERN_ERR "Attempt to access invalid inode block: %d\n", translated_idx);
 		return count;
@@ -154,8 +150,6 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 {
 	int err;
 	struct inode *inode;
-	struct buffer_head *bh;
-	struct winterfs_inode *wfs_inode;
 	struct winterfs_inode_info *wfs_info;
 	struct super_block *sb = dir->i_sb;
 
@@ -166,13 +160,7 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 		err = PTR_ERR(inode);
 		goto err;
 	}
-	wfs_inode = winterfs_get_inode(sb, inode->i_ino, &bh);
-	if (IS_ERR(wfs_inode)) {
-		err = PTR_ERR(wfs_inode);
-		goto err;
-	}
 
-	// TODO: make a function to move all of this out of mkdir
 	wfs_info = inode->i_private;
 	wfs_info->direct_blocks[0] = winterfs_allocate_data_block(sb);
 	
@@ -185,16 +173,10 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
         inode->i_mtime.tv_sec = ktime_get_real();
         inode->i_ctime.tv_sec = ktime_get_real();
 
-	wfs_inode->size = cpu_to_le32(WINTERFS_BLOCK_SIZE);
-	wfs_inode->type = WINTERFS_INODE_DIR;
-	wfs_inode->direct_blocks[0] = cpu_to_le32(wfs_info->direct_blocks[0]);
-	wfs_inode->create_time = cpu_to_le64(inode->i_ctime.tv_sec);
-	wfs_inode->modify_time = cpu_to_le64(inode->i_mtime.tv_sec);
-	wfs_inode->access_time = cpu_to_le64(inode->i_atime.tv_sec);
-
 	winterfs_dir_link_inode(dentry, dir, inode);
-	mark_buffer_dirty(bh);
 	d_instantiate_new(dentry, inode);
+	__winterfs_write_inode(inode);
+	mark_inode_dirty(inode);
 
 	return 0;
 

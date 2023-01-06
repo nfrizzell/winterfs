@@ -164,11 +164,6 @@ err_inode:
 	return ERR_PTR(err);
 }
 
-void winterfs_free_inode(struct inode *inode)
-{
-	// TODO
-}
-
 struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 {
 	struct inode *inode;
@@ -211,7 +206,6 @@ struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 	}
 
 	unlock_new_inode(inode);
-
 	brelse(bh);
 
 	return inode;
@@ -243,3 +237,53 @@ struct winterfs_inode *winterfs_get_inode(struct super_block *sb, ino_t ino, str
 	*bh_out = bh;
 	return (struct winterfs_inode *) (bh->b_data + offset);
 }
+
+int __winterfs_write_inode(struct inode *inode)
+{
+	int i;
+	struct buffer_head *bh;
+	struct winterfs_inode *wfs_inode;
+	struct winterfs_inode_info *wfs_info;
+	struct super_block *sb = inode->i_sb;
+	u32 ino = inode->i_ino;
+
+	wfs_info = inode->i_private;
+	if (!wfs_info) {
+		printk(KERN_ERR "Attempt to save invalid inode: ino %d\n", ino);
+		return -EINVAL;
+	}
+
+	wfs_inode = winterfs_get_inode(sb, ino, &bh);
+	if (IS_ERR(wfs_inode)) {
+		return PTR_ERR(wfs_inode);
+	}
+
+	wfs_inode->size = cpu_to_le64(inode->i_size);
+	wfs_inode->type = inode->i_mode == S_IFDIR ? WINTERFS_INODE_DIR : WINTERFS_INODE_FILE;
+	wfs_inode->create_time = cpu_to_le64(inode->i_ctime.tv_sec);
+	wfs_inode->modify_time = cpu_to_le64(inode->i_mtime.tv_sec);
+	wfs_inode->access_time = cpu_to_le64(inode->i_atime.tv_sec);
+	for (i = 0; i < WINTERFS_INODE_DIRECT_BLOCKS; i++) {
+		wfs_inode->direct_blocks[i] = cpu_to_le32(wfs_info->direct_blocks[i]);
+	}
+	wfs_inode->indirect_primary = cpu_to_le32(wfs_info->indirect_primary);
+	wfs_inode->indirect_secondary = cpu_to_le32(wfs_info->indirect_secondary);
+	wfs_inode->indirect_tertiary = cpu_to_le32(wfs_info->indirect_tertiary);
+
+	mark_buffer_dirty(bh);
+	brelse(bh);
+
+	return 0;
+}
+
+int winterfs_write_inode(struct inode *inode, struct writeback_control *wbc)
+{
+	return __winterfs_write_inode(inode);
+}
+
+void winterfs_free_inode(struct inode *inode)
+{
+	// TODO
+}
+
+
