@@ -16,10 +16,10 @@
 
 #define WINTERFS_INODE_DIRECT_BLOCKS	8
 #define WINTERFS_INODE_SIZE             128
-#define WINTERFS_INODE_FILE             0
-#define WINTERFS_INODE_DIR              1
 
 #define WINTERFS_INODE_RATIO		(1 << 15)
+
+#define WINTERFS_DEFAULT_PERMS		0755
 
 bool host_is_le()
 {
@@ -53,13 +53,13 @@ uint64_t le64(uint32_t val)
 
 struct winterfs_inode {
 	uint64_t size;
+	uint16_t mode;
+	uint32_t uid;
+	uint32_t gid;
 	uint64_t create_time;
 	uint64_t modify_time;
 	uint64_t access_time;
-        uint32_t parent_ino;
-        uint8_t filename_len; // names are placed at the beginning of the first data block
-	uint8_t type;
-	uint8_t pad[46]; // reserved for metadata
+	uint8_t pad[42]; // reserved for metadata
 	uint32_t direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
 	uint32_t indirect_primary;
 	uint32_t indirect_secondary;
@@ -164,10 +164,10 @@ int format_device(char *device_path)
 
 	struct winterfs_inode root = {
 		.size = le64(WINTERFS_BLOCK_SIZE),
+		.mode = S_IFDIR | WINTERFS_DEFAULT_PERMS,
 		.create_time = le64((uint32_t)time(NULL)),
 		.modify_time = le64((uint32_t)time(NULL)),
 		.access_time = le64((uint32_t)time(NULL)),
-		.type = WINTERFS_INODE_DIR,
 	};
 	root.direct_blocks[0] = get_next_free_bit(&fb);
 	get_next_free_bit(&fi);

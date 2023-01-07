@@ -170,7 +170,7 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
         inode->i_fop = &winterfs_dir_operations;
 	inode->i_size = WINTERFS_BLOCK_SIZE;
 	inode_init_owner(&init_user_ns, inode, dir, mode);
-	inode->i_mode = S_IFDIR;
+	inode->i_mode |= S_IFDIR;
 	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 
 	winterfs_dir_link_inode(dentry, inode);

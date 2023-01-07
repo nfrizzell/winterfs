@@ -7,6 +7,8 @@
 
 #define WINTERFS_NULL_INODE		0
 
+#define WINTERFS_DEFAULT_PERMS		0755
+
 #define WINTERFS_INODE_SIZE 		128
 #define WINTERFS_INODE_FILE 		0
 #define WINTERFS_INODE_DIR 		1
@@ -45,13 +47,13 @@
 
 struct winterfs_inode {
 	__le64 size; // in bytes
+        __le16 mode;
+	__le32 uid;
+	__le32 gid;
 	__le64 create_time;
 	__le64 modify_time;
 	__le64 access_time;
-	__le32 parent_ino;
-	u8 filename_len; // filenames are placed in their own block
-        u8 type;
-	u8 pad[46]; // reserved for metadata
+	u8 pad[42]; // reserved for metadata
 	__le32 direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
 	__le32 indirect_primary;
         __le32 indirect_secondary;
