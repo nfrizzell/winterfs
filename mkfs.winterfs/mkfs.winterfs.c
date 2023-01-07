@@ -138,8 +138,7 @@ int format_device(char *device_path)
 		.size = num_inodes,
 		.bitset = calloc((num_inodes / 8) + (num_inodes % 8 != 0), 1)
 	};
-	// null & root ino
-	get_next_free_bit(&fi);
+	// skip null ino
 	get_next_free_bit(&fi);
 
 	struct winterfs_bitset fb = {

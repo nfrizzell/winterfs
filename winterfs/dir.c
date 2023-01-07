@@ -168,12 +168,12 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 
 	inode->i_op = &winterfs_dir_inode_operations;
         inode->i_fop = &winterfs_dir_operations;
+	inode->i_size = WINTERFS_BLOCK_SIZE;
+	inode_init_owner(&init_user_ns, inode, dir, mode);
 	inode->i_mode = S_IFDIR;
-	inode->i_atime.tv_sec = ktime_get_real();
-        inode->i_mtime.tv_sec = ktime_get_real();
-        inode->i_ctime.tv_sec = ktime_get_real();
+	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 
-	winterfs_dir_link_inode(dentry, dir, inode);
+	winterfs_dir_link_inode(dentry, inode);
 	d_instantiate_new(dentry, inode);
 	__winterfs_write_inode(inode);
 	mark_inode_dirty(inode);
@@ -197,12 +197,12 @@ struct winterfs_filename *winterfs_dir_block_filename(
 	return &(dbi->db->files[idx]);
 }
 
-int winterfs_dir_link_inode(struct dentry *dent, struct inode *dir,
-	struct inode *inode)
+int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 {
 	struct super_block *sb;
 	u32 dir_num_blocks;
 	u32 block;
+	struct inode *dir = d_inode(dent->d_parent);
 	int res = -ENOMEM;
 
 	sb = dir->i_sb;
@@ -226,11 +226,11 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *dir,
 		winterfs_free_dir_block_info(wdbi);
 	}
 
+	mark_inode_dirty(dir);
 	//TODO allocate more blocks as needed, write function to do this
 
 	return res;
 };
-
 
 const struct inode_operations winterfs_dir_inode_operations = {
 	.mkdir		= winterfs_mkdir,

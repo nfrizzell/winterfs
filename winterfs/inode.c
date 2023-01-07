@@ -151,7 +151,7 @@ struct inode *winterfs_new_inode(struct super_block *sb)
 	}
 
 	inode->i_ino = free_ino;
-	
+	insert_inode_locked(inode);
 	mark_inode_dirty(inode);
 
 	return inode;
@@ -170,6 +170,7 @@ struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 	struct winterfs_inode *wfs_inode;
 	struct winterfs_inode_info *wfs_info;
 	struct buffer_head *bh = NULL;
+	int i;
 	int err = 0;
 
 	inode = iget_locked(sb, ino);
@@ -193,6 +194,12 @@ struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 	inode->i_atime.tv_sec = le64_to_cpu(wfs_inode->access_time);
 	inode->i_mtime.tv_sec = le64_to_cpu(wfs_inode->modify_time);
 	inode->i_ctime.tv_sec = le64_to_cpu(wfs_inode->create_time);
+        for (i = 0; i < WINTERFS_INODE_DIRECT_BLOCKS; i++) {
+                wfs_info->direct_blocks[i] = le32_to_cpu(wfs_inode->direct_blocks[i]);
+        }
+	wfs_info->indirect_primary = le32_to_cpu(wfs_inode->indirect_primary);
+        wfs_info->indirect_secondary = le32_to_cpu(wfs_inode->indirect_secondary);
+        wfs_info->indirect_tertiary = le32_to_cpu(wfs_inode->indirect_tertiary);
 
 	if (S_ISREG(inode->i_mode)) {
                 inode->i_op = &winterfs_file_inode_operations;
@@ -259,7 +266,7 @@ int __winterfs_write_inode(struct inode *inode)
 	}
 
 	wfs_inode->size = cpu_to_le64(inode->i_size);
-	wfs_inode->type = inode->i_mode == S_IFDIR ? WINTERFS_INODE_DIR : WINTERFS_INODE_FILE;
+	wfs_inode->type = inode->i_mode & S_IFDIR ? WINTERFS_INODE_DIR : WINTERFS_INODE_FILE;
 	wfs_inode->create_time = cpu_to_le64(inode->i_ctime.tv_sec);
 	wfs_inode->modify_time = cpu_to_le64(inode->i_mtime.tv_sec);
 	wfs_inode->access_time = cpu_to_le64(inode->i_atime.tv_sec);
@@ -285,5 +292,3 @@ void winterfs_free_inode(struct inode *inode)
 {
 	// TODO
 }
-
-
