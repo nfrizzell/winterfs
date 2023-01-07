@@ -151,7 +151,6 @@ struct inode *winterfs_new_inode(struct super_block *sb)
 	}
 
 	inode->i_ino = free_ino;
-	inode->i_mode |= WINTERFS_DEFAULT_PERMS;
 	insert_inode_locked(inode);
 	mark_inode_dirty(inode);
 

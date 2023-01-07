@@ -3,6 +3,7 @@
 #include <linux/fs.h>
 #include "winterfs.h"
 #include "winterfs_dir.h"
+#include "winterfs_file.h"
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
@@ -82,7 +83,7 @@ static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry,
 		winterfs_free_dir_block_info(wdbi);
 	}
 
-	printk(KERN_ERR "File not found in dir: %s\n", dentry->d_name.name);
+	// File not found
 	return NULL;
 }
 
@@ -142,6 +143,26 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 static int winterfs_create(struct user_namespace *mnt_userns, struct inode *dir,
 	struct dentry *dentry, umode_t mode, bool excl)
 {
+	int err;
+        struct inode *inode;
+	struct super_block *sb = dir->i_sb;
+
+        inode = winterfs_new_inode(sb);
+        if (IS_ERR(inode)) {
+                return PTR_ERR(inode);
+	}
+
+	inode->i_op = &winterfs_file_inode_operations;
+	inode->i_fop = &winterfs_file_operations;
+	inode->i_mapping->a_ops = &winterfs_address_operations;
+
+	err = winterfs_dir_link_inode(dentry, inode);
+	if (err) {
+		// TODO: probably need to do some other stuff here as well
+		return err;
+	}
+        mark_inode_dirty(inode);
+
 	return 0;
 }
 
@@ -152,6 +173,8 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 	struct inode *inode;
 	struct winterfs_inode_info *wfs_info;
 	struct super_block *sb = dir->i_sb;
+
+	mode |= S_IFDIR;
 
 	inode_inc_link_count(dir);
 
@@ -168,9 +191,10 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 
 	inode->i_op = &winterfs_dir_inode_operations;
         inode->i_fop = &winterfs_dir_operations;
+        inode->i_mapping->a_ops = &winterfs_address_operations;
+
 	inode->i_size = WINTERFS_BLOCK_SIZE;
 	inode_init_owner(&init_user_ns, inode, dir, mode);
-	inode->i_mode |= S_IFDIR;
 	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 
 	winterfs_dir_link_inode(dentry, inode);
