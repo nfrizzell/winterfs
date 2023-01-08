@@ -20,7 +20,10 @@ const struct inode_operations winterfs_file_inode_operations = {
 };
 
 const struct file_operations winterfs_file_operations = {
+	.fsync		= generic_file_fsync,
 	.llseek         = generic_file_llseek,
+	.mmap		= generic_file_mmap,
+	.open		= generic_file_open,
         .read_iter      = generic_file_read_iter,
         .write_iter     = generic_file_write_iter,
 };

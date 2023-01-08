@@ -155,12 +155,16 @@ static int winterfs_create(struct user_namespace *mnt_userns, struct inode *dir,
 	inode->i_op = &winterfs_file_inode_operations;
 	inode->i_fop = &winterfs_file_operations;
 	inode->i_mapping->a_ops = &winterfs_address_operations;
+	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode_init_owner(&init_user_ns, inode, dir, mode);
 
+	d_instantiate_new(dentry, inode);
 	err = winterfs_dir_link_inode(dentry, inode);
 	if (err) {
 		// TODO: probably need to do some other stuff here as well
 		return err;
 	}
+	__winterfs_write_inode(inode);
         mark_inode_dirty(inode);
 
 	return 0;
@@ -192,13 +196,15 @@ static int winterfs_mkdir(struct user_namespace *mnt_userns,
 	inode->i_op = &winterfs_dir_inode_operations;
         inode->i_fop = &winterfs_dir_operations;
         inode->i_mapping->a_ops = &winterfs_address_operations;
-
 	inode->i_size = WINTERFS_BLOCK_SIZE;
-	inode_init_owner(&init_user_ns, inode, dir, mode);
 	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode_init_owner(&init_user_ns, inode, dir, mode);
 
-	winterfs_dir_link_inode(dentry, inode);
 	d_instantiate_new(dentry, inode);
+	err = winterfs_dir_link_inode(dentry, inode);
+	if (err) {
+		goto err;
+	}
 	__winterfs_write_inode(inode);
 	mark_inode_dirty(inode);
 
