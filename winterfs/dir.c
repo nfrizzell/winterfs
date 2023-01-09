@@ -161,7 +161,6 @@ static int winterfs_create(struct user_namespace *mnt_userns, struct inode *dir,
 	d_instantiate_new(dentry, inode);
 	err = winterfs_dir_link_inode(dentry, inode);
 	if (err) {
-		// TODO: probably need to do some other stuff here as well
 		return err;
 	}
 	__winterfs_write_inode(inode);

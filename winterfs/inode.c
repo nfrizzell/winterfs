@@ -206,6 +206,7 @@ struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 	if (S_ISREG(inode->i_mode)) {
                 inode->i_op = &winterfs_file_inode_operations;
                 inode->i_fop = &winterfs_file_operations;
+		inode->i_mapping->a_ops = &winterfs_address_operations;
 	} else if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = &winterfs_dir_inode_operations;
                 inode->i_fop = &winterfs_dir_operations;
