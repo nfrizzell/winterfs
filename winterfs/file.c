@@ -7,7 +7,6 @@
 static int winterfs_get_block(struct inode *inode, sector_t iblock,
         struct buffer_head *bh, int create)
 {
-	printk(KERN_ERR "iblock: %d bh size: %d\n", iblock, bh->b_size);
 	u32 i;
 	u32 num_blocks_to_allocate;
 	u32 translated_block;
@@ -27,15 +26,15 @@ static int winterfs_get_block(struct inode *inode, sector_t iblock,
 				//TODO
 				return -ENOMEM;
 			}
-			printk(KERN_ERR "allocating block %d: %d\n", i, wfs_info->direct_blocks[i]);
 			inode->i_size += WINTERFS_BLOCK_SIZE;
 		}
+		bh->b_size = num_blocks_to_allocate * WINTERFS_BLOCK_SIZE;
+		set_buffer_new(bh);
+		set_buffer_boundary(bh);
 	}
 
 	translated_block = winterfs_translate_block_idx(inode, iblock);
 	map_bh(bh, inode->i_sb, translated_block);
-	bh->b_size = num_blocks_to_allocate * WINTERFS_BLOCK_SIZE;
-
 	mark_inode_dirty(inode);
 
 	return 0;
@@ -79,7 +78,6 @@ static int winterfs_read_folio(struct file *file, struct folio *folio)
 
 static void winterfs_read_ahead(struct readahead_control *rac)
 {
-	printk(KERN_ERR "winterfs readahead\n");
 	mpage_readahead(rac, winterfs_get_block);
 }
 
