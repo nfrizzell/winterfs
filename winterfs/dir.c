@@ -37,8 +37,7 @@ static struct winterfs_dir_block_info *winterfs_dir_load_block(struct super_bloc
 	return wdbi;
 }
 
-static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry, 
-	unsigned int flags)
+static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 {
 	u32 dir_num_blocks;
 	u32 block;
@@ -169,6 +168,34 @@ static int winterfs_create(struct user_namespace *mnt_userns, struct inode *dir,
 	return 0;
 }
 
+static int winterfs_unlink(struct inode *dir, struct dentry *dentry)
+{
+	struct winterfs_dir_block_info *wdbi;
+	struct winterfs_inode_info *wfs_info;
+	struct inode *inode = d_inode(dentry);
+	struct super_block *sb = dir->i_sb;
+
+	wfs_info = inode->i_private;
+	if (!wfs_info) {
+                printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
+                return -EINVAL;
+	}
+
+	wdbi = winterfs_dir_load_block(sb, wfs_info->dir_block);
+	if (IS_ERR(wdbi)) {
+                return PTR_ERR(wdbi);
+        }
+
+	wdbi->db->inode_list[wfs_info->dir_block_off] = WINTERFS_NULL_INODE;
+	memset((char*)(&wdbi->db->files[wfs_info->dir_block_off]), 0, WINTERFS_FILENAME_MAX_LEN);
+
+	inode->i_ctime = dir->i_ctime;
+	winterfs_free_dir_block_info(wdbi);
+	inode_dec_link_count(inode);
+	
+	return 0;
+}
+
 static int winterfs_mkdir(struct user_namespace *mnt_userns,
         struct inode *dir, struct dentry *dentry, umode_t mode)
 {
@@ -231,8 +258,15 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 	struct super_block *sb;
 	u32 dir_num_blocks;
 	u32 block;
+	struct winterfs_inode_info *wfs_info;
 	struct inode *dir = d_inode(dent->d_parent);
 	int res = -ENOMEM;
+
+	wfs_info = inode->i_private;
+	if (!wfs_info) {
+		printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
+                return -EINVAL;
+	}
 
 	sb = dir->i_sb;
 	dir_num_blocks = winterfs_inode_num_blocks(dir);
@@ -247,6 +281,8 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 				wdbi->inode_list[i] = inode->i_ino;
 				wdbi->db->inode_list[i] = inode->i_ino;
 				strncpy((char*)(&wdbi->db->files[i]), filename, WINTERFS_FILENAME_MAX_LEN);
+				wfs_info->dir_block = translated_block;
+				wfs_info->dir_block_off = i;
 				mark_buffer_dirty(wdbi->bh);
 				res = 0;	
 				break;
@@ -264,7 +300,8 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 const struct inode_operations winterfs_dir_inode_operations = {
 	.mkdir		= winterfs_mkdir,
 	.create		= winterfs_create,
-	.lookup		= winterfs_lookup
+	.lookup		= winterfs_lookup,
+	.unlink		= winterfs_unlink
 };
 
 const struct file_operations winterfs_dir_operations = {

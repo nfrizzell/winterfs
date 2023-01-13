@@ -196,6 +196,8 @@ struct inode *winterfs_iget(struct super_block *sb, u32 ino)
 	inode->i_atime.tv_sec = le64_to_cpu(wfs_inode->access_time);
 	inode->i_mtime.tv_sec = le64_to_cpu(wfs_inode->modify_time);
 	inode->i_ctime.tv_sec = le64_to_cpu(wfs_inode->create_time);
+	wfs_info->dir_block = le32_to_cpu(wfs_inode->dir_block);
+	wfs_info->dir_block_off = le32_to_cpu(wfs_inode->dir_block_off);
         for (i = 0; i < WINTERFS_INODE_DIRECT_BLOCKS; i++) {
                 wfs_info->direct_blocks[i] = le32_to_cpu(wfs_inode->direct_blocks[i]);
         }
@@ -275,6 +277,8 @@ int __winterfs_write_inode(struct inode *inode)
 	wfs_inode->create_time = cpu_to_le64(inode->i_ctime.tv_sec);
 	wfs_inode->modify_time = cpu_to_le64(inode->i_mtime.tv_sec);
 	wfs_inode->access_time = cpu_to_le64(inode->i_atime.tv_sec);
+	wfs_inode->dir_block = cpu_to_le32(wfs_info->dir_block);
+	wfs_inode->dir_block_off = cpu_to_le32(wfs_info->dir_block_off);
 	for (i = 0; i < WINTERFS_INODE_DIRECT_BLOCKS; i++) {
 		wfs_inode->direct_blocks[i] = cpu_to_le32(wfs_info->direct_blocks[i]);
 	}
