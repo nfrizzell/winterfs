@@ -80,9 +80,9 @@ u32 winterfs_allocate_data_block(struct super_block *sb)
 			return 0;
 		}
 
-                zero_bit = find_first_zero_bit((unsigned long*)bh->b_data, num_bits);
+                zero_bit = find_first_zero_bit((unsigned long *)bh->b_data, num_bits);
                 if (zero_bit != num_bits) {
-                        bh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
+			set_bit(zero_bit, (unsigned long *)bh->b_data);
                         mark_buffer_dirty(bh);
                         free_block = (i * 8 * WINTERFS_BLOCK_SIZE) + zero_bit;
                         brelse(bh);
@@ -136,7 +136,7 @@ struct inode *winterfs_new_inode(struct super_block *sb)
 
 		zero_bit = find_first_zero_bit((unsigned long*)bh->b_data, num_bits);
 		if (zero_bit != num_bits) {
-			bh->b_data[zero_bit/8] |= (1 << (zero_bit % 8));
+			set_bit(zero_bit, (unsigned long*)bh->b_data);
 			mark_buffer_dirty(bh);
 			free_ino = (i * 8 * WINTERFS_BLOCK_SIZE) + zero_bit;
 			brelse(bh);

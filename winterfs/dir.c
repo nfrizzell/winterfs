@@ -75,11 +75,11 @@ static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry, 
 			struct winterfs_filename *filename = winterfs_dir_block_filename(wdbi, file_idx);
 			if (strncmp(filename->name, dentry->d_name.name, WINTERFS_FILENAME_MAX_LEN) == 0) {
 				struct inode *inode = winterfs_iget(sb, ino);
-				winterfs_free_dir_block_info(wdbi);
+				winterfs_free_dir_block_info(wdbi, false);
 				return d_splice_alias(inode, dentry);
 			}
 		}
-		winterfs_free_dir_block_info(wdbi);
+		winterfs_free_dir_block_info(wdbi, false);
 	}
 
 	// File not found
@@ -134,7 +134,7 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 		}
 	}
 
-	winterfs_free_dir_block_info(wdbi);
+	winterfs_free_dir_block_info(wdbi, false);
 
 	return count;
 }
@@ -170,17 +170,25 @@ static int winterfs_create(struct user_namespace *mnt_userns, struct inode *dir,
 
 static int winterfs_unlink(struct inode *dir, struct dentry *dentry)
 {
+	u32 i;
+	u32 num_blocks;
+	u32 bitset_block;
+	struct buffer_head *bh;
 	struct winterfs_dir_block_info *wdbi;
+	struct winterfs_inode *wfs_inode;
 	struct winterfs_inode_info *wfs_info;
 	struct inode *inode = d_inode(dentry);
 	struct super_block *sb = dir->i_sb;
+	struct winterfs_sb_info *sbi = sb->s_fs_info;
+	int err = 0;
 
 	wfs_info = inode->i_private;
 	if (!wfs_info) {
                 printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
                 return -EINVAL;
 	}
-
+	
+	// remove dir entry
 	wdbi = winterfs_dir_load_block(sb, wfs_info->dir_block);
 	if (IS_ERR(wdbi)) {
                 return PTR_ERR(wdbi);
@@ -188,12 +196,49 @@ static int winterfs_unlink(struct inode *dir, struct dentry *dentry)
 
 	wdbi->db->inode_list[wfs_info->dir_block_off] = WINTERFS_NULL_INODE;
 	memset((char*)(&wdbi->db->files[wfs_info->dir_block_off]), 0, WINTERFS_FILENAME_MAX_LEN);
+	winterfs_free_dir_block_info(wdbi, true);
+	
+	// mark inode as free
+	bitset_block = sbi->free_inode_bitset_idx + (inode->i_ino / (WINTERFS_BLOCK_SIZE * 8));
+	bh = sb_bread(sb, bitset_block);
+	if (!bh) {
+		printk(KERN_ERR "Error reading directory block %u\n", bitset_block);
+		err = -EIO;
+		goto finish;
+	}
+	clear_bit(inode->i_ino % (WINTERFS_BLOCK_SIZE * 8), (unsigned long*)bh->b_data);
+	mark_buffer_dirty(bh);
+	brelse(bh);
 
+	// mark data blocks as free
+	num_blocks = winterfs_inode_num_blocks(inode);
+	for (i = 0; i < num_blocks; i++) {
+		if (i < WINTERFS_INODE_DIRECT_BLOCKS) {
+			u32 translated_block = winterfs_translate_block_idx(inode, i);
+			u32 block_num = translated_block - sbi->data_blocks_idx;
+			bitset_block = sbi->free_block_bitset_idx + (i / (WINTERFS_BLOCK_SIZE * 8));
+			bh = sb_bread(sb, bitset_block);
+			if (!bh) {
+				printk(KERN_ERR "Error reading directory block %u\n", bitset_block);
+				err = -EIO;
+				goto finish;
+			}
+			clear_bit(block_num % (WINTERFS_BLOCK_SIZE * 8), (unsigned long*)bh->b_data);
+			mark_buffer_dirty(bh);
+			brelse(bh);
+		} else {
+			//TODO
+			break;
+		}
+        }
+
+finish:
+	mark_inode_dirty(dir);
+	mark_inode_dirty(inode);
 	inode->i_ctime = dir->i_ctime;
-	winterfs_free_dir_block_info(wdbi);
 	inode_dec_link_count(inode);
 	
-	return 0;
+	return err;
 }
 
 static int winterfs_mkdir(struct user_namespace *mnt_userns,
@@ -241,8 +286,11 @@ err:
 	return err;
 }
 
-void winterfs_free_dir_block_info(struct winterfs_dir_block_info *wdbi)
+void winterfs_free_dir_block_info(struct winterfs_dir_block_info *wdbi, bool dirty)
 {
+	if (dirty) {
+		mark_buffer_dirty(wdbi->bh);
+	}
 	brelse(wdbi->bh);
 	kfree(wdbi);
 }
@@ -283,12 +331,11 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 				strncpy((char*)(&wdbi->db->files[i]), filename, WINTERFS_FILENAME_MAX_LEN);
 				wfs_info->dir_block = translated_block;
 				wfs_info->dir_block_off = i;
-				mark_buffer_dirty(wdbi->bh);
 				res = 0;	
 				break;
 			}
 		}
-		winterfs_free_dir_block_info(wdbi);
+		winterfs_free_dir_block_info(wdbi, true);
 	}
 
 	mark_inode_dirty(dir);

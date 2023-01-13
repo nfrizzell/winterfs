@@ -28,7 +28,7 @@ struct winterfs_dir_block_info {
 
 extern const struct file_operations winterfs_dir_operations;
 
-void winterfs_free_dir_block_info(struct winterfs_dir_block_info *wdbi);
+void winterfs_free_dir_block_info(struct winterfs_dir_block_info *wdbi, bool dirty);
 struct winterfs_filename *winterfs_dir_block_filename(
 	struct winterfs_dir_block_info *dbi, u8 idx);
 int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode);
