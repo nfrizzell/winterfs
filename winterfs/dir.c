@@ -176,26 +176,26 @@ static int winterfs_unlink(struct inode *dir, struct dentry *dentry)
 	struct buffer_head *bh;
 	struct winterfs_dir_block_info *wdbi;
 	struct winterfs_inode *wfs_inode;
-	struct winterfs_inode_info *wfs_info;
+	struct winterfs_inode_info *wfs_dir_info;
+	struct winterfs_inode_info *wfs_file_info;
 	struct inode *inode = d_inode(dentry);
 	struct super_block *sb = dir->i_sb;
 	struct winterfs_sb_info *sbi = sb->s_fs_info;
 	int err = 0;
 
-	wfs_info = inode->i_private;
-	if (!wfs_info) {
+	wfs_dir_info = dir->i_private;
+	wfs_file_info = inode->i_private;
+	if (!wfs_dir_info || !wfs_file_info) {
                 printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
                 return -EINVAL;
 	}
 	
 	// remove dir entry
-	wdbi = winterfs_dir_load_block(sb, wfs_info->dir_block);
+	wdbi = winterfs_dir_load_block(sb, wfs_file_info->dir_block);
 	if (IS_ERR(wdbi)) {
                 return PTR_ERR(wdbi);
         }
-
-	wdbi->db->inode_list[wfs_info->dir_block_off] = WINTERFS_NULL_INODE;
-	memset((char*)(&wdbi->db->files[wfs_info->dir_block_off]), 0, WINTERFS_FILENAME_MAX_LEN);
+	wdbi->db->inode_list[wfs_file_info->dir_block_off] = WINTERFS_NULL_INODE;
 	winterfs_free_dir_block_info(wdbi, true);
 	
 	// mark inode as free
@@ -233,6 +233,7 @@ static int winterfs_unlink(struct inode *dir, struct dentry *dentry)
         }
 
 finish:
+	wfs_dir_info->num_children--;
 	mark_inode_dirty(dir);
 	mark_inode_dirty(inode);
 	inode->i_ctime = dir->i_ctime;
@@ -286,6 +287,32 @@ err:
 	return err;
 }
 
+static int winterfs_rmdir(struct inode *dir, struct dentry *dentry)
+{
+	int err;
+	struct inode *inode = d_inode(dentry);
+	struct winterfs_inode_info *wfs_info = inode->i_private;
+	if (!wfs_info) {
+		printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
+                return -EINVAL;
+	}
+
+	if (wfs_info->num_children > 0) {
+		return -ENOTEMPTY;
+	}
+		
+	err = winterfs_unlink(dir, dentry);
+	if (err) {
+		return err;
+	}
+
+	inode->i_size = 0;
+	inode_dec_link_count(inode);
+	inode_dec_link_count(dir);
+
+	return 0;
+}
+
 void winterfs_free_dir_block_info(struct winterfs_dir_block_info *wdbi, bool dirty)
 {
 	if (dirty) {
@@ -306,12 +333,14 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 	struct super_block *sb;
 	u32 dir_num_blocks;
 	u32 block;
-	struct winterfs_inode_info *wfs_info;
+	struct winterfs_inode_info *wfs_info_dir;
+	struct winterfs_inode_info *wfs_info_file;
 	struct inode *dir = d_inode(dent->d_parent);
 	int res = -ENOMEM;
 
-	wfs_info = inode->i_private;
-	if (!wfs_info) {
+	wfs_info_dir = dir->i_private;
+	wfs_info_file = inode->i_private;
+	if (!wfs_info_dir || !wfs_info_file) {
 		printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
                 return -EINVAL;
 	}
@@ -329,8 +358,9 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 				wdbi->inode_list[i] = inode->i_ino;
 				wdbi->db->inode_list[i] = inode->i_ino;
 				strncpy((char*)(&wdbi->db->files[i]), filename, WINTERFS_FILENAME_MAX_LEN);
-				wfs_info->dir_block = translated_block;
-				wfs_info->dir_block_off = i;
+				wfs_info_dir->num_children++;
+				wfs_info_file->dir_block = translated_block;
+				wfs_info_file->dir_block_off = i;
 				res = 0;	
 				break;
 			}
@@ -346,6 +376,7 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 
 const struct inode_operations winterfs_dir_inode_operations = {
 	.mkdir		= winterfs_mkdir,
+	.rmdir		= winterfs_rmdir,
 	.create		= winterfs_create,
 	.lookup		= winterfs_lookup,
 	.unlink		= winterfs_unlink

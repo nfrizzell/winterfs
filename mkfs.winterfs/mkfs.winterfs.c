@@ -61,7 +61,8 @@ struct winterfs_inode {
 	uint64_t access_time;
 	uint32_t dir_block;
 	uint32_t dir_block_off;
-	uint8_t pad[34]; // reserved for metadata
+	uint32_t num_children; // only applicable for dirs
+	uint8_t pad[30]; // reserved for metadata
 	uint32_t direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
 	uint32_t indirect_primary;
 	uint32_t indirect_secondary;

@@ -55,7 +55,8 @@ struct winterfs_inode {
 	__le64 access_time;
 	__le32 dir_block;
 	__le32 dir_block_off;
-	u8 pad[34]; // reserved for metadata
+	__le32 num_children; // only applicable for dirs
+	u8 pad[30]; // reserved for metadata
 	__le32 direct_blocks[WINTERFS_INODE_DIRECT_BLOCKS];
 	__le32 indirect_primary;
         __le32 indirect_secondary;
@@ -72,6 +73,7 @@ struct winterfs_inode_info {
 	// location of associated dir entry block & offset within it
 	u32 dir_block;
 	u32 dir_block_off;
+	u32 num_children; // only applicable for dirs
 };
 
 extern const struct inode_operations winterfs_file_inode_operations;
