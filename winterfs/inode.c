@@ -7,19 +7,71 @@
 #include "winterfs_ino.h"
 #include "winterfs_sb.h"
 
+enum winterfs_indirection_level {
+	WINTERFS_INDIRECTION_DIR = 0,
+	WINTERFS_INDIRECTION_IND1,
+	WINTERFS_INDIRECTION_IND2,
+	WINTERFS_INDIRECTION_IND3,
+};
+
+struct winterfs_indirect_block_list {
+	__le32 blocks[WINTERFS_BLOCK_SIZE / sizeof(__le32)];
+} __attribute__((packed));
+
+struct winterfs_indirect_block_list_info {
+	u32 blocks[WINTERFS_BLOCK_SIZE / sizeof(__le32)];
+};
+
+struct winterfs_inode_key {
+	enum winterfs_indirection_level ind_level;
+	u32 ind1;
+	u32 ind2;
+	u32 ind3;
+	u32 idx;
+};
+
+static void winterfs_fill_inode_key(struct winterfs_inode_key *key, u32 idx)
+{
+	if (idx < WINTERFS_NUM_BLOCK_IDX_DIRECT) {
+		key->ind_level = WINTERFS_INDIRECTION_DIR;
+		key->idx = idx;
+        } else {
+		u32 shift = idx - WINTERFS_NUM_BLOCK_IDX_DIRECT;
+                key->idx = shift % (WINTERFS_BLOCK_SIZE / 4);
+		if (idx >= WINTERFS_NUM_BLOCK_IDX_DIRECT) {
+			key->ind_level = WINTERFS_INDIRECTION_IND1;
+			key->ind1 = shift / WINTERFS_NUM_BLOCK_IDX_IND1;
+		}
+		if (idx >= WINTERFS_NUM_BLOCK_IDX_DIRECT
+			+ WINTERFS_NUM_BLOCK_IDX_IND1) {
+			key->ind_level = WINTERFS_INDIRECTION_IND2;
+			key->ind2 = shift / WINTERFS_NUM_BLOCK_IDX_IND2;
+		}
+		if (idx >= WINTERFS_NUM_BLOCK_IDX_DIRECT
+			+ WINTERFS_NUM_BLOCK_IDX_IND1
+			+ WINTERFS_NUM_BLOCK_IDX_IND2) {
+			key->ind_level = WINTERFS_INDIRECTION_IND3;
+			key->ind3 = shift / WINTERFS_NUM_BLOCK_IDX_IND3;
+		} 
+	}
+}
+
 u32 winterfs_inode_num_blocks(struct inode *inode)
 {
 	return (inode->i_size / WINTERFS_BLOCK_SIZE) + ((inode->i_size % WINTERFS_BLOCK_SIZE) != 0);
 }
 
-u32 winterfs_translate_block_idx(struct inode *inode, u32 block) 
+u32 winterfs_get_inode_block_idx(struct inode *inode, u32 block) 
 {
 	u32 inode_num_blocks;
 	u32 idx = 0;
+	struct winterfs_inode_key key;
 	struct super_block *sb = inode->i_sb;
 	struct winterfs_sb_info *sbi = sb->s_fs_info;
 	struct winterfs_inode_info *wfs_info = inode->i_private;
 	u32 data_blocks_idx = sbi->data_blocks_idx;
+
+	memset(&key, 0, sizeof(struct winterfs_inode_key));
 
 	if (!wfs_info) {
 		printk(KERN_ERR "Attempt to read data from improperly loaded inode\n");
@@ -31,6 +83,9 @@ u32 winterfs_translate_block_idx(struct inode *inode, u32 block)
 		printk(KERN_ERR "Inode block index out of bounds\n");
 		return 0;
 	}
+
+	winterfs_fill_inode_key(&key, block);
+	//printk(KERN_ERR "block: %u type: %u d: %u 1: %u 2: %u 3: %u\n", block, key.ind_level, key.idx, key.ind1, key.ind2, key.ind3);
 
 	if (block < WINTERFS_NUM_BLOCK_IDX_DIRECT) {
 		idx = wfs_info->direct_blocks[block];

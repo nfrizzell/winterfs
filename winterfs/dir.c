@@ -61,12 +61,12 @@ static struct dentry *winterfs_lookup(struct inode *dir, struct dentry *dentry, 
 	for (block = 0; block < dir_num_blocks; block++) {
 		struct winterfs_dir_block_info *wdbi;
 		u8 file_idx;
-		u32 translated_block = winterfs_translate_block_idx(dir, block);
-		if (!translated_block) {
+		u32 mapped_block = winterfs_get_inode_block_idx(dir, block);
+		if (!mapped_block) {
 			printk(KERN_WARNING "Attempt to access invalid inode block\n");
 			continue;
 		}
-		wdbi = winterfs_dir_load_block(sb, translated_block);
+		wdbi = winterfs_dir_load_block(sb, mapped_block);
 		if (IS_ERR(wdbi)) {
 			return NULL;
 		}
@@ -90,7 +90,7 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
 {
 	u8 i;
 	u32 block_idx;
-	u32 translated_idx;
+	u32 mapped_idx;
 	struct inode *inode = dir->f_inode;
 	struct winterfs_dir_block_info *wdbi;
 	struct super_block *sb = inode->i_sb;
@@ -115,12 +115,12 @@ static int winterfs_readdir(struct file *dir, struct dir_context *ctx)
         }
 
 	block_idx = pos / WINTERFS_BLOCK_SIZE;
-	translated_idx = winterfs_translate_block_idx(inode, block_idx);
-	if (!translated_idx) {
-		printk(KERN_ERR "Attempt to access invalid inode block: %d\n", translated_idx);
+	mapped_idx = winterfs_get_inode_block_idx(inode, block_idx);
+	if (!mapped_idx) {
+		printk(KERN_ERR "Attempt to access invalid inode block: %d\n", mapped_idx);
 		return count;
 	}
-	wdbi = winterfs_dir_load_block(sb, translated_idx);
+	wdbi = winterfs_dir_load_block(sb, mapped_idx);
 	if (IS_ERR(wdbi)) {
                 return count;
         }
@@ -214,8 +214,8 @@ static int winterfs_unlink(struct inode *dir, struct dentry *dentry)
 	num_blocks = winterfs_inode_num_blocks(inode);
 	for (i = 0; i < num_blocks; i++) {
 		if (i < WINTERFS_INODE_DIRECT_BLOCKS) {
-			u32 translated_block = winterfs_translate_block_idx(inode, i);
-			u32 block_num = translated_block - sbi->data_blocks_idx;
+			u32 mapped_block = winterfs_get_inode_block_idx(inode, i);
+			u32 block_num = mapped_block - sbi->data_blocks_idx;
 			bitset_block = sbi->free_block_bitset_idx + (i / (WINTERFS_BLOCK_SIZE * 8));
 			bh = sb_bread(sb, bitset_block);
 			if (!bh) {
@@ -349,8 +349,8 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 	dir_num_blocks = winterfs_inode_num_blocks(dir);
 	for (block = 0; (res != 0) && block < dir_num_blocks; block++) {
 		u8 i;
-		u32 translated_block = winterfs_translate_block_idx(dir, block);
-		struct winterfs_dir_block_info *wdbi = winterfs_dir_load_block(sb, translated_block);
+		u32 mapped_block = winterfs_get_inode_block_idx(dir, block);
+		struct winterfs_dir_block_info *wdbi = winterfs_dir_load_block(sb, mapped_block);
 		
 		for (i = 0; i < WINTERFS_FILES_PER_DIR_BLOCK; i++) {
 			if (!wdbi->inode_list[i]) {
@@ -359,7 +359,7 @@ int winterfs_dir_link_inode(struct dentry *dent, struct inode *inode)
 				wdbi->db->inode_list[i] = inode->i_ino;
 				strncpy((char*)(&wdbi->db->files[i]), filename, WINTERFS_FILENAME_MAX_LEN);
 				wfs_info_dir->num_children++;
-				wfs_info_file->dir_block = translated_block;
+				wfs_info_file->dir_block = mapped_block;
 				wfs_info_file->dir_block_off = i;
 				res = 0;	
 				break;

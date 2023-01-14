@@ -14,10 +14,6 @@
 #define WINTERFS_ROOT_INODE		1
 
 // on-disk structure
-struct winterfs_indirect_block_list {
-	__le32 blocks[WINTERFS_BLOCK_SIZE / sizeof(__le32)];
-} __attribute__((packed));
-
 struct winterfs_superblock {
 	__le32 magic;
         __le32 num_inodes;

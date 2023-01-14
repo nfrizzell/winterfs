@@ -19,19 +19,19 @@
 	WINTERFS_INODE_DIRECT_BLOCKS
 
 #define WINTERFS_NUM_BLOCK_IDX_IND1	\
-	WINTERFS_BLOCK_SIZE / 4LL 	\
+	(WINTERFS_BLOCK_SIZE / 4LL) 	\
 
 #define WINTERFS_NUM_BLOCK_IDX_IND2	\
-	(WINTERFS_BLOCK_SIZE / 16LL)  	\
-	* WINTERFS_BLOCK_SIZE
+	((WINTERFS_BLOCK_SIZE / 16LL)  	\
+	* WINTERFS_BLOCK_SIZE)
 
 #define WINTERFS_NUM_BLOCK_IDX_IND3	\
-	(WINTERFS_BLOCK_SIZE / 64LL) 	\
+	((WINTERFS_BLOCK_SIZE / 64LL) 	\
 	* WINTERFS_BLOCK_SIZE	 	\
-	* WINTERFS_BLOCK_SIZE
+	* WINTERFS_BLOCK_SIZE)
 
 #define WINTERFS_MAX_FILE_SIZE		\
-	WINTERFS_INODE_DIRECT_BLOCKS 	\
+	(WINTERFS_INODE_DIRECT_BLOCKS 	\
 	* WINTERFS_BLOCK_SIZE		\
 					\
 	+ WINTERFS_NUM_BLOCK_IDX_IND1	\
@@ -41,10 +41,11 @@
 	* WINTERFS_BLOCK_SIZE	 	\
 					\
 	+ WINTERFS_NUM_BLOCK_IDX_IND3	\
-	* WINTERFS_BLOCK_SIZE	 	\
+	* WINTERFS_BLOCK_SIZE)	 	\
 
 #define WINTERFS_TIME_RES 		1000000 // 1 second
 
+// on-disk structure
 struct winterfs_inode {
 	__le64 size; // in bytes
         __le16 mode;
@@ -80,7 +81,8 @@ extern const struct inode_operations winterfs_file_inode_operations;
 extern const struct inode_operations winterfs_dir_inode_operations;
 
 u32 winterfs_inode_num_blocks(struct inode *inode);
-u32 winterfs_translate_block_idx(struct inode *inode, u32 block);
+u32 winterfs_get_inode_block_idx(struct inode *inode, u32 block);
+u32 winterfs_set_inode_block_idx(struct inode *inode, u32 block);
 u32 winterfs_allocate_data_block(struct super_block *sb);
 struct inode *winterfs_new_inode(struct super_block *sb);
 struct inode *winterfs_iget (struct super_block *sb, u32 ino);

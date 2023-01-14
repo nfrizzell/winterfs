@@ -9,7 +9,7 @@ static int winterfs_get_block(struct inode *inode, sector_t iblock,
 {
 	u32 i;
 	u32 num_blocks_to_allocate;
-	u32 translated_block;
+	u32 mapped_block;
 	u32 inode_num_blocks = winterfs_inode_num_blocks(inode);
 	struct super_block *sb = inode->i_sb;
 	struct winterfs_inode_info *wfs_info = inode->i_private;
@@ -33,8 +33,8 @@ static int winterfs_get_block(struct inode *inode, sector_t iblock,
 		set_buffer_boundary(bh);
 	}
 
-	translated_block = winterfs_translate_block_idx(inode, iblock);
-	map_bh(bh, inode->i_sb, translated_block);
+	mapped_block = winterfs_get_inode_block_idx(inode, iblock);
+	map_bh(bh, inode->i_sb, mapped_block);
 	mark_inode_dirty(inode);
 
 	return 0;
